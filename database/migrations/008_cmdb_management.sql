@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS cmdb_ci_relationships (
     retired_at DATETIME NULL,
     UNIQUE KEY uq_cmdb_relationship (source_ci_id, target_ci_id, relationship_type, status),
     INDEX idx_cmdb_rel_source (source_ci_id),
-    INDEX idx_cmdb_rel_target (target_ci_id)
+    INDEX idx_cmdb_rel_target (target_ci_id),
+    CONSTRAINT fk_cmdb_rel_source FOREIGN KEY (source_ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cmdb_rel_target FOREIGN KEY (target_ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS cmdb_ci_audit (
@@ -56,7 +58,8 @@ CREATE TABLE IF NOT EXISTS cmdb_ci_audit (
     old_data JSON NULL,
     new_data JSON NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_cmdb_audit_ci (ci_id, created_at)
+    INDEX idx_cmdb_audit_ci (ci_id, created_at),
+    CONSTRAINT fk_cmdb_audit_ci FOREIGN KEY (ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 INSERT IGNORE INTO cmdb_ci_types (code, name) VALUES
