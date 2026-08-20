@@ -12,9 +12,12 @@ $pdo = new PDO(
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
 );
 
-$pdo->exec("INSERT INTO users (username, password_hash, full_name, email, is_active, created_at, updated_at) VALUES ('kb_test','x','KB Test','kb-test@example.test',1,NOW(),NOW()) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+$pdo->exec("INSERT INTO roles (code,name) VALUES ('KB_TEST','Knowledge Test') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+$roleId = (int)$pdo->lastInsertId();
+if ($roleId < 1) $roleId = (int)$pdo->query("SELECT id FROM roles WHERE code='KB_TEST'")->fetchColumn();
+$pdo->exec("INSERT INTO users (username,password_hash,full_name,email,role_id,is_active,created_at) VALUES ('kb_test','x','KB Test','kb-test@example.test',{$roleId},1,NOW()) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
 $userId = (int)$pdo->lastInsertId();
-if ($userId < 1) { $userId = (int)$pdo->query("SELECT id FROM users WHERE username='kb_test'")->fetchColumn(); }
+if ($userId < 1) $userId = (int)$pdo->query("SELECT id FROM users WHERE username='kb_test'")->fetchColumn();
 
 $id = KnowledgeService::create($pdo, [
     'title'=>'VPN troubleshooting guide',
@@ -34,6 +37,6 @@ if (!$article || $article['status'] !== 'PUBLISHED') throw new RuntimeException(
 
 $history = $pdo->prepare('SELECT COUNT(*) FROM knowledge_history WHERE article_id=?');
 $history->execute([$id]);
-if ((int)$history->fetchColumn() < 3) throw new RuntimeException('Knowledge history incomplete.');
+if ((int)$history->fetchColumn() < 4) throw new RuntimeException('Knowledge history incomplete.');
 
 echo "Knowledge MySQL integration tests passed\n";
