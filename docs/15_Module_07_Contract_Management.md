@@ -156,40 +156,78 @@ Alert 2 = 60 days before expiry
 Alert 3 = 30 days before expiry
 ```
 
-However, the system stores alert rules per contract so Product can later configure another schedule without database redesign.
+The system stores alert rules per contract. The alert engine reads `contract_alert_rules`; it does not hard-code 90/60/30 into the scheduler.
 
 Existing tables:
 
-- `contract_alert_rules`
-- `contract_alerts`
+- `contract_alert_rules` — configuration.
+- `contract_alerts` — execution/audit instances.
+- `email_logs` — email delivery audit.
 
 Each alert records:
 
 - alert_no
 - scheduled_date
+- attempted_at
 - sent_at
 - status
 - recipient
 - cc
 - error_message
+- email_log_id
 - created_at
 
-## 9. Alert Recipients
+## 9. Alert Engine Flow
 
-Required operational routing:
+```text
+Daily Scheduler
+      ↓
+Find ACTIVE / EXPIRING contracts
+      ↓
+Read contract_alert_rules
+      ↓
+Calculate scheduled date
+      ↓
+Create / reuse contract_alerts row
+      ↓
+Already SENT? ── YES → STOP
+      │
+      NO
+      ↓
+Already attempted today? ── YES → STOP
+      │
+      NO
+      ↓
+Resolve recipients server-side
+      ↓
+Send email
+      ↓
+Write email_logs
+      ↓
+Update contract_alerts
+      ├── SENT + sent_at
+      └── FAILED + error_message
+```
 
-**To:** IT Owner when available; otherwise IT Lead.
+A missed scheduler run can catch up an unsent alert because due instances are selected when their scheduled date is on or before the current business date. A failed attempt is not retried repeatedly on the same day; it becomes eligible again on a later scheduler run.
 
-**CC:**
+## 10. Alert Recipients
 
+The agreed operational requirement is:
+
+**Customer notification:** Customer is the primary recipient when a customer email is available.
+
+**Internal visibility:**
+
+- IT Owner.
 - IT Lead.
 - Sales owner of the contract.
 
-Product may later add Customer notification as an independent rule.
+Internal recipients are placed in CC when Customer email is available. If Customer email is unavailable, the service falls back to an internal recipient as TO and keeps the remaining internal recipients in CC.
 
-The recipient list is generated server-side from contract relationships. It is never accepted from the browser.
+The recipient list is generated server-side from Customer/Contract/User relationships. It is never accepted from the browser.
 
-## 10. Three-Alert Traceability
+## 11. Three-Alert Traceability
 
 The Contract list must make the three alerts auditable.
 
@@ -203,25 +241,28 @@ Recommended columns:
 
 The UI should show status rather than merely a boolean so failures are visible.
 
-## 11. Alert Idempotency
+## 12. Alert Idempotency and Retry
 
-A scheduled alert must not be sent twice for the same contract and alert number.
+A scheduled alert must not be sent twice after it is marked SENT for the same contract and alert number.
 
-The database uniqueness rule `contract_id + alert_no` is the primary protection. The service must also verify existing sent state before sending.
+The database uniqueness rule `contract_id + alert_no` is the primary instance protection. The service also checks `sent_at` before sending.
 
-## 12. Alert Failure
+`attempted_at` prevents repeated sends during the same scheduler day. `FAILED` records remain retryable on a later day. This creates a traceable retry path without silently losing failed notifications.
+
+## 13. Alert Failure
 
 If email sending fails:
 
 - Record FAILED.
 - Store error_message.
+- Store an email log.
 - Keep alert auditable.
 - Do not mark sent_at.
 - Allow a later retry mechanism.
 
 A failed email must never silently disappear.
 
-## 13. Customer Portal UX
+## 14. Customer Portal UX
 
 ### Contract List
 
@@ -248,7 +289,7 @@ Customer-visible Information
 
 No internal alert recipient or internal note is exposed.
 
-## 14. Internal Portal UX
+## 15. Internal Portal UX
 
 ### Contract Dashboard
 
@@ -278,13 +319,13 @@ Summary cards:
 - Activate.
 - Configure services.
 - Configure alert schedule.
-- Send/retry alert when authorized.
 - View alert history.
+- Retry failed alert when authorized.
 - Upload/associate document when enabled.
 - Renew.
 - Cancel.
 
-## 15. Shared UI Principle
+## 16. Shared UI Principle
 
 Customer Portal and Internal Portal use the same visual language:
 
@@ -296,7 +337,7 @@ Customer Portal and Internal Portal use the same visual language:
 
 Only data scope and actions differ through RBAC + customer scope.
 
-## 16. Contract ↔ Ticket
+## 17. Contract ↔ Ticket
 
 Ticket creation may resolve a contract by:
 
@@ -314,7 +355,7 @@ SLA resolution
 
 A Ticket must not be considered contract-covered merely because the Customer has some other active contract.
 
-## 17. Contract ↔ SLA
+## 18. Contract ↔ SLA
 
 The exact Product decision remains configurable:
 
@@ -323,7 +364,7 @@ The exact Product decision remains configurable:
 
 The Contract module therefore exposes the contract/service relationship and does not hard-code SLA selection logic.
 
-## 18. Contract Documents
+## 19. Contract Documents
 
 PDF/document visibility remains a Product Decision.
 
@@ -334,7 +375,7 @@ The data model and authorization boundary should support:
 
 Raw filesystem paths must never be exposed directly.
 
-## 19. Security
+## 20. Security
 
 Every contract operation must verify:
 
@@ -354,7 +395,7 @@ Customer Portal access is restricted to the customer's own contracts.
 
 Internal users can only access contracts allowed by their RBAC/data scope.
 
-## 20. Audit
+## 21. Audit
 
 Audit at minimum:
 
@@ -372,7 +413,7 @@ Audit at minimum:
 - Renewed.
 - Cancelled.
 
-## 21. Acceptance Criteria
+## 22. Acceptance Criteria
 
 - AC-CON-001 Contract number is unique and immutable.
 - AC-CON-002 Customer is required.
@@ -385,13 +426,16 @@ Audit at minimum:
 - AC-CON-009 Default schedule can represent 90/60/30 days.
 - AC-CON-010 Each alert is idempotent.
 - AC-CON-011 Alert failure is persisted as FAILED.
-- AC-CON-012 IT Owner/IT Lead/Sales recipient routing is generated server-side.
-- AC-CON-013 Alert history records sent date/time.
+- AC-CON-012 Customer + IT Owner + IT Lead + Sales routing is generated server-side.
+- AC-CON-013 Alert history records attempted/sent date/time.
 - AC-CON-014 Contract status transitions are validated server-side.
 - AC-CON-015 Renewed/expired contracts remain historically traceable.
 - AC-CON-016 Contract scope is enforced on every read/write endpoint.
+- AC-CON-017 Email delivery attempts are persisted in `email_logs`.
+- AC-CON-018 Same-day duplicate alert attempts are blocked.
+- AC-CON-019 Failed alerts can become eligible for a later retry.
 
-## 22. Test Gate
+## 23. Test Gate
 
 Module 07 is not DONE until:
 
@@ -405,5 +449,6 @@ Module 07 is not DONE until:
 - Alert failure tests PASS.
 - Recipient routing tests PASS.
 - MySQL integration PASS.
+- Alert Engine MySQL integration PASS.
 - Regression Modules 01–06 PASS.
 - GitHub Actions GREEN.
