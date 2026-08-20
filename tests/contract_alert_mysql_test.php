@@ -31,9 +31,9 @@ try {
         ['TEST-ALERT-OWNER','Alert Owner','owner@example.test'],
         ['TEST-ALERT-LEAD','Alert Lead','lead@example.test'],
         ['TEST-ALERT-SALES','Alert Sales','sales@example.test'],
-    ] as [$username,$name,$email]) {
-        $stmt = $db->prepare('INSERT INTO users(username,password_hash,full_name,email,role_id,is_active,created_at) VALUES(?,?,?,?,1,1,NOW()) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),email=VALUES(email)');
-        $stmt->execute([$username,'test-hash',$name,$email]);
+    ] as [$username,$fullName,$email]) {
+        $stmt = $db->prepare('INSERT INTO users(username,password_hash,full_name,email,role_id,is_active,created_at) VALUES(?,?,?,?,?,1,NOW()) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),email=VALUES(email),role_id=VALUES(role_id)');
+        $stmt->execute([$username,'test-hash',$fullName,$email,$roleId]);
         $id = (int)$db->lastInsertId();
         if ($id === 0) {
             $id = (int)$db->query("SELECT id FROM users WHERE username=" . $db->quote($username))->fetchColumn();
