@@ -1,0 +1,40 @@
+name: Contract Module Tests
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'public/contract.php'
+      - 'tests/contract_validation_test.php'
+      - 'docs/11_Module_03_Contract_Management.md'
+      - '.github/workflows/contract-tests.yml'
+  pull_request:
+    paths:
+      - 'public/contract.php'
+      - 'tests/contract_validation_test.php'
+      - 'docs/11_Module_03_Contract_Management.md'
+      - '.github/workflows/contract-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          php -l public/contract.php
+          php -l tests/contract_validation_test.php
+
+      - name: Contract validation tests
+        run: php tests/contract_validation_test.php
