@@ -92,6 +92,28 @@ if ((int)$relRow['source_ci_id'] !== $ci1 || (int)$relRow['target_ci_id'] !== $c
     throw new RuntimeException('Relationship fields mismatch.');
 }
 
+// Database-level uniqueness must reject a duplicate active relationship.
+$duplicateRejected = false;
+try {
+    $service->addRelationship($ci1, $ci2, 'USES');
+} catch (PDOException) {
+    $duplicateRejected = true;
+}
+if (!$duplicateRejected) {
+    throw new RuntimeException('Duplicate active CI relationship was accepted.');
+}
+
+// Database-level foreign keys must reject relationships to non-existent CIs.
+$orphanRelationshipRejected = false;
+try {
+    $service->addRelationship($ci1, 999999999, 'USES');
+} catch (PDOException) {
+    $orphanRelationshipRejected = true;
+}
+if (!$orphanRelationshipRejected) {
+    throw new RuntimeException('Relationship to a non-existent CI was accepted.');
+}
+
 $audit = $db->prepare('SELECT action FROM cmdb_ci_audit WHERE ci_id=? ORDER BY id');
 $audit->execute([$ci1]);
 $actions = $audit->fetchAll(PDO::FETCH_COLUMN);
@@ -108,6 +130,10 @@ try {
 if (!$invalidTransitionRejected) {
     throw new RuntimeException('Invalid ACTIVE to DISPOSED transition was accepted.');
 }
+$status->execute([$ci1]);
+if ($status->fetchColumn() !== 'ACTIVE') {
+    throw new RuntimeException('Rejected transition changed the CI status.');
+}
 
 $invalidRelationshipRejected = false;
 try {
@@ -117,6 +143,14 @@ try {
 }
 if (!$invalidRelationshipRejected) {
     throw new RuntimeException('Self CI relationship was accepted.');
+}
+
+// Verify the new FK cascade: removing the target CI removes its relationships.
+$db->prepare('DELETE FROM cmdb_cis WHERE id=?')->execute([$ci2]);
+$relationshipCount = $db->prepare('SELECT COUNT(*) FROM cmdb_ci_relationships WHERE id=?');
+$relationshipCount->execute([$rel]);
+if ((int)$relationshipCount->fetchColumn() !== 0) {
+    throw new RuntimeException('CI relationship was not removed by FK cascade.');
 }
 
 echo "CMDB MySQL integration tests passed\n";
