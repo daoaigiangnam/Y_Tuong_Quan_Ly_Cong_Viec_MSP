@@ -1,0 +1,36 @@
+name: Ticket Module Tests
+
+on:
+  push:
+    branches: [ feature/php-mysql-msp-platform ]
+  pull_request:
+    branches: [ feature/php-mysql-msp-platform ]
+
+jobs:
+  ticket-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP Lint
+        shell: bash
+        run: |
+          set -e
+          for f in app/ticket_policy.php public/ticket.php tests/ticket_validation_test.php; do
+            php -l "$f"
+          done
+
+      - name: Ticket Validation Tests
+        run: php tests/ticket_validation_test.php
+
+      - name: Regression PHP Lint
+        shell: bash
+        run: |
+          set -e
+          find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
