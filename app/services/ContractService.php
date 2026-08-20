@@ -6,6 +6,41 @@ require_once __DIR__ . '/../contract_policy.php';
 
 final class ContractService
 {
+    private static function beginUnitOfWork(PDO $db): ?string
+    {
+        if (!$db->inTransaction()) {
+            $db->beginTransaction();
+            return null;
+        }
+
+        $savepoint = 'contract_sp_' . bin2hex(random_bytes(4));
+        $db->exec('SAVEPOINT ' . $savepoint);
+        return $savepoint;
+    }
+
+    private static function commitUnitOfWork(PDO $db, ?string $savepoint): void
+    {
+        if ($savepoint === null) {
+            $db->commit();
+            return;
+        }
+
+        $db->exec('RELEASE SAVEPOINT ' . $savepoint);
+    }
+
+    private static function rollbackUnitOfWork(PDO $db, ?string $savepoint): void
+    {
+        if ($savepoint === null) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            return;
+        }
+
+        $db->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
+        $db->exec('RELEASE SAVEPOINT ' . $savepoint);
+    }
+
     public static function create(PDO $db, array $data): int
     {
         $errors = validate_contract_payload($data);
@@ -19,7 +54,7 @@ final class ContractService
             $number = 'CTR-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
         }
 
-        $db->beginTransaction();
+        $savepoint = self::beginUnitOfWork($db);
         try {
             $stmt = $db->prepare(
                 'INSERT INTO contracts(contract_no,customer_id,contract_type,start_date,end_date,value,status,owner_user_id,lead_user_id,sales_user_id,public_notes,internal_notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
@@ -62,17 +97,17 @@ final class ContractService
                 $ruleStmt->execute([$id, $alertNo, $daysBefore]);
             }
 
-            $db->commit();
+            self::commitUnitOfWork($db, $savepoint);
             return $id;
         } catch (Throwable $e) {
-            $db->rollBack();
+            self::rollbackUnitOfWork($db, $savepoint);
             throw $e;
         }
     }
 
     public static function transition(PDO $db, int $id, string $to): void
     {
-        $db->beginTransaction();
+        $savepoint = self::beginUnitOfWork($db);
         try {
             $stmt = $db->prepare('SELECT status FROM contracts WHERE id=? FOR UPDATE');
             $stmt->execute([$id]);
@@ -89,9 +124,9 @@ final class ContractService
 
             $update = $db->prepare('UPDATE contracts SET status=?, updated_at=? WHERE id=?');
             $update->execute([$to, date('Y-m-d H:i:s'), $id]);
-            $db->commit();
+            self::commitUnitOfWork($db, $savepoint);
         } catch (Throwable $e) {
-            $db->rollBack();
+            self::rollbackUnitOfWork($db, $savepoint);
             throw $e;
         }
     }
