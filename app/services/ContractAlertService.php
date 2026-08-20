@@ -1,27 +1,168 @@
 <?php
+
 declare(strict_types=1);
 
 final class ContractAlertService
 {
-    public static function run(PDO $db,array $config): array
+    /**
+     * Create the due alert instances for a business date without sending email.
+     * This method is deterministic and is used by integration tests and the scheduler.
+     */
+    public static function planDueAlerts(PDO $db, DateTimeImmutable $today): array
     {
-        $rows=$db->query("SELECT c.*,cu.name customer_name,cu.email customer_email,uo.email owner_email,ul.email lead_email,us.email sales_email FROM contracts c JOIN customers cu ON cu.id=c.customer_id LEFT JOIN users uo ON uo.id=c.owner_user_id LEFT JOIN users ul ON ul.id=c.lead_user_id LEFT JOIN users us ON us.id=c.sales_user_id WHERE c.status='ACTIVE' AND c.end_date>=CURDATE()")->fetchAll();
-        $sent=[];
-        foreach($rows as $c){
-            $rules=$db->prepare('SELECT * FROM contract_alert_rules WHERE contract_id=? AND is_active=1 ORDER BY alert_no'); $rules->execute([$c['id']]);
-            foreach($rules->fetchAll() as $r){
-                $target=(new DateTime($c['end_date']))->modify('-'.(int)$r['days_before'].' days')->format('Y-m-d');
-                if($target!==date('Y-m-d')) continue;
-                $chk=$db->prepare('SELECT id FROM contract_alerts WHERE contract_id=? AND alert_no=? AND sent_at IS NOT NULL LIMIT 1'); $chk->execute([$c['id'],$r['alert_no']]); if($chk->fetch()) continue;
-                $subject='CẢNH BÁO HỢP ĐỒNG - Lần '.$r['alert_no'].' - '.$c['contract_no'];
-                $body="Kính gửi Anh/Chị,\n\nHợp đồng {$c['contract_no']} - {$c['customer_name']} sẽ hết hạn ngày {$c['end_date']}.\nĐây là cảnh báo lần {$r['alert_no']} (trước {$r['days_before']} ngày).\n\nVui lòng kiểm tra kế hoạch gia hạn.\n\nMSP ITSM";
-                $to=$c['owner_email'] ?: $c['lead_email']; $cc=implode(',',array_filter([$c['lead_email'],$c['sales_email']]));
-                $ok=$to ? mail_notice($config,$to,$subject,$body,$cc) : false;
-                $s=$db->prepare('INSERT INTO contract_alerts(contract_id,alert_no,scheduled_date,sent_at,status,recipient,cc,error_message,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE sent_at=VALUES(sent_at),status=VALUES(status),recipient=VALUES(recipient),cc=VALUES(cc),error_message=VALUES(error_message)');
-                $s->execute([$c['id'],$r['alert_no'],$target,$ok?now():null,$ok?'SENT':'FAILED',$to,$cc,$ok?null:'No recipient or mail() failed',now()]);
-                $sent[]=['contract'=>$c['contract_no'],'alert'=>$r['alert_no'],'status'=>$ok?'SENT':'FAILED'];
+        $todayDate = $today->format('Y-m-d');
+        $sql = "SELECT c.id contract_id,c.contract_no,c.customer_id,c.customer_email,
+                       c.end_date,c.owner_user_id,c.lead_user_id,c.sales_user_id,
+                       cu.name customer_name,cu.email customer_email_direct,
+                       uo.email owner_email,ul.email lead_email,us.email sales_email,
+                       r.alert_no,r.days_before
+                FROM contracts c
+                JOIN customers cu ON cu.id=c.customer_id
+                LEFT JOIN users uo ON uo.id=c.owner_user_id
+                LEFT JOIN users ul ON ul.id=c.lead_user_id
+                LEFT JOIN users us ON us.id=c.sales_user_id
+                JOIN contract_alert_rules r ON r.contract_id=c.id AND r.is_active=1
+                WHERE c.status IN ('ACTIVE','EXPIRING')
+                  AND c.end_date >= ?
+                  AND DATE_SUB(c.end_date, INTERVAL r.days_before DAY) <= ?
+                ORDER BY c.end_date,r.alert_no";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute([$todayDate, $todayDate]);
+        $planned = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $scheduledDate = (new DateTimeImmutable($row['end_date']))
+                ->modify('-' . (int)$row['days_before'] . ' days')
+                ->format('Y-m-d');
+
+            $insert = $db->prepare(
+                'INSERT INTO contract_alerts(contract_id,alert_no,scheduled_date,status,created_at)
+                 VALUES(?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE scheduled_date=VALUES(scheduled_date)'
+            );
+            $insert->execute([
+                (int)$row['contract_id'],
+                (int)$row['alert_no'],
+                $scheduledDate,
+                'PENDING',
+                now(),
+            ]);
+
+            $alertStmt = $db->prepare(
+                'SELECT ca.*,c.contract_no,c.end_date,cu.name customer_name,
+                        COALESCE(cu.email,(SELECT cc.email FROM customer_contacts cc WHERE cc.customer_id=c.customer_id AND cc.is_active=1 ORDER BY cc.is_primary DESC,cc.id ASC LIMIT 1)) customer_email,
+                        uo.email owner_email,ul.email lead_email,us.email sales_email,
+                        r.days_before
+                 FROM contract_alerts ca
+                 JOIN contracts c ON c.id=ca.contract_id
+                 JOIN customers cu ON cu.id=c.customer_id
+                 JOIN contract_alert_rules r ON r.contract_id=c.id AND r.alert_no=ca.alert_no
+                 LEFT JOIN users uo ON uo.id=c.owner_user_id
+                 LEFT JOIN users ul ON ul.id=c.lead_user_id
+                 LEFT JOIN users us ON us.id=c.sales_user_id
+                 WHERE ca.contract_id=? AND ca.alert_no=?
+                 LIMIT 1'
+            );
+            $alertStmt->execute([(int)$row['contract_id'], (int)$row['alert_no']]);
+            $alert = $alertStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$alert || $alert['sent_at'] !== null) {
+                continue;
             }
+
+            // A failed attempt is retried on a later scheduler run, but never twice on the same day.
+            if ($alert['attempted_at'] !== null && substr((string)$alert['attempted_at'], 0, 10) === $todayDate) {
+                continue;
+            }
+
+            $planned[] = $alert;
         }
-        return $sent;
+
+        return $planned;
+    }
+
+    private static function recipients(array $alert): array
+    {
+        $to = trim((string)($alert['customer_email'] ?? ''));
+        $internal = array_values(array_unique(array_filter([
+            trim((string)($alert['owner_email'] ?? '')),
+            trim((string)($alert['lead_email'] ?? '')),
+            trim((string)($alert['sales_email'] ?? '')),
+        ])));
+
+        if ($to === '' && $internal !== []) {
+            $to = array_shift($internal);
+        }
+
+        return [$to, implode(',', $internal)];
+    }
+
+    private static function logEmail(PDO $db, int $alertId, string $recipient, string $subject, bool $ok, ?string $error): int
+    {
+        $stmt = $db->prepare(
+            'INSERT INTO email_logs(event_type,entity,entity_id,recipient,subject,status,error_message,created_at)
+             VALUES(?,?,?,?,?,?,?,?)'
+        );
+        $stmt->execute([
+            'CONTRACT_EXPIRY_ALERT',
+            'CONTRACT_ALERT',
+            $alertId,
+            $recipient,
+            $subject,
+            $ok ? 'SENT' : 'FAILED',
+            $error,
+            now(),
+        ]);
+        return (int)$db->lastInsertId();
+    }
+
+    public static function run(PDO $db, array $config, ?DateTimeImmutable $today = null): array
+    {
+        $today = $today ?: new DateTimeImmutable('today');
+        $alerts = self::planDueAlerts($db, $today);
+        $results = [];
+
+        foreach ($alerts as $alert) {
+            $alertId = (int)$alert['id'];
+            $subject = 'CẢNH BÁO HỢP ĐỒNG - Lần ' . (int)$alert['alert_no'] . ' - ' . $alert['contract_no'];
+            $body = "Kính gửi Anh/Chị,\n\n"
+                . "Hợp đồng {$alert['contract_no']} - {$alert['customer_name']} sẽ hết hạn ngày {$alert['end_date']}.\n"
+                . "Đây là cảnh báo lần {$alert['alert_no']} (trước {$alert['days_before']} ngày).\n\n"
+                . "Vui lòng kiểm tra kế hoạch gia hạn.\n\nMSP ITSM";
+
+            [$to, $cc] = self::recipients($alert);
+            $attemptedAt = now();
+            $db->prepare('UPDATE contract_alerts SET attempted_at=? WHERE id=?')->execute([$attemptedAt, $alertId]);
+
+            $error = null;
+            $ok = false;
+            if ($to !== '') {
+                $ok = mail_notice($config, $to, $subject, $body, $cc ?: null);
+                if (!$ok) {
+                    $error = 'mail() failed';
+                }
+            } else {
+                $error = 'No recipient email configured';
+            }
+
+            $recipientAudit = $to . ($cc !== '' ? ' | CC: ' . $cc : '');
+            $emailLogId = self::logEmail($db, $alertId, $recipientAudit, $subject, $ok, $error);
+            $status = $ok ? 'SENT' : 'FAILED';
+            $sentAt = $ok ? now() : null;
+
+            $update = $db->prepare(
+                'UPDATE contract_alerts SET sent_at=?,status=?,recipient=?,cc=?,error_message=?,email_log_id=? WHERE id=?'
+            );
+            $update->execute([$sentAt, $status, $to, $cc ?: null, $error, $emailLogId, $alertId]);
+
+            $results[] = [
+                'contract' => $alert['contract_no'],
+                'alert' => (int)$alert['alert_no'],
+                'status' => $status,
+                'scheduled_date' => $alert['scheduled_date'],
+            ];
+        }
+
+        return $results;
     }
 }
