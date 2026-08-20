@@ -1,0 +1,53 @@
+name: CMDB Module Tests
+
+on:
+  push:
+    branches: [ feature/php-mysql-msp-platform ]
+  pull_request:
+    branches: [ feature/php-mysql-msp-platform ]
+
+jobs:
+  cmdb-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msp_itsm_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do mysqladmin ping -h 127.0.0.1 -uroot -proot && exit 0 || sleep 2; done
+          exit 1
+      - name: Install schema
+        run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/schema.sql
+      - name: Install CMDB migration
+        run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/migrations/008_cmdb_management.sql
+      - name: PHP Lint
+        run: |
+          php -l app/cmdb_policy.php
+          php -l app/services/CmdbService.php
+          php -l tests/cmdb_validation_test.php
+          php -l tests/cmdb_service_mysql_test.php
+      - name: CMDB Validation
+        run: php tests/cmdb_validation_test.php
+      - name: CMDB MySQL Integration
+        env:
+          MSP_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=msp_itsm_test;charset=utf8mb4
+          MSP_TEST_DB_USER: root
+          MSP_TEST_DB_PASSWORD: root
+        run: php tests/cmdb_service_mysql_test.php
