@@ -34,7 +34,15 @@ jobs:
           for i in {1..30}; do mysqladmin ping -h 127.0.0.1 -uroot -proot && exit 0 || sleep 2; done
           exit 1
       - name: Install schema
-        run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/schema.sql
+        run: |
+          sed \
+            -e '/^CREATE DATABASE IF NOT EXISTS msp_itsm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;/d' \
+            -e '/^USE msp_itsm;/d' \
+            database/schema.sql | mysql -h 127.0.0.1 -uroot -proot msp_itsm_test
+      - name: Verify test schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test'" | grep -q '^13$'
+          mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -e "SHOW TABLES LIKE 'customers'; SHOW TABLES LIKE 'tickets';"
       - name: Install CMDB migration
         run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/migrations/008_cmdb_management.sql
       - name: PHP Lint
