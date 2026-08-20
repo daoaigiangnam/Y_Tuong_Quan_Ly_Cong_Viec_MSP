@@ -4,6 +4,38 @@ declare(strict_types=1);
 
 final class ContractAlertService
 {
+    private static function beginUnitOfWork(PDO $db): ?string
+    {
+        if (!$db->inTransaction()) {
+            $db->beginTransaction();
+            return null;
+        }
+        $savepoint = 'alert_sp_' . bin2hex(random_bytes(4));
+        $db->exec('SAVEPOINT ' . $savepoint);
+        return $savepoint;
+    }
+
+    private static function commitUnitOfWork(PDO $db, ?string $savepoint): void
+    {
+        if ($savepoint === null) {
+            $db->commit();
+            return;
+        }
+        $db->exec('RELEASE SAVEPOINT ' . $savepoint);
+    }
+
+    private static function rollbackUnitOfWork(PDO $db, ?string $savepoint): void
+    {
+        if ($savepoint === null) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            return;
+        }
+        $db->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
+        $db->exec('RELEASE SAVEPOINT ' . $savepoint);
+    }
+
     public static function planDueAlerts(PDO $db, DateTimeImmutable $today): array
     {
         $todayDate = $today->format('Y-m-d');
@@ -78,7 +110,7 @@ final class ContractAlertService
 
     private static function claimAlert(PDO $db, int $alertId, string $todayDate): ?array
     {
-        $db->beginTransaction();
+        $savepoint = self::beginUnitOfWork($db);
         try {
             $stmt = $db->prepare(
                 'SELECT ca.*,c.contract_no,c.end_date,cu.name customer_name,
@@ -98,23 +130,21 @@ final class ContractAlertService
             $stmt->execute([$alertId]);
             $alert = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$alert || $alert['sent_at'] !== null) {
-                $db->commit();
+                self::commitUnitOfWork($db, $savepoint);
                 return null;
             }
 
             if ($alert['attempted_at'] !== null && substr((string)$alert['attempted_at'], 0, 10) === $todayDate) {
-                $db->commit();
+                self::commitUnitOfWork($db, $savepoint);
                 return null;
             }
 
             $db->prepare('UPDATE contract_alerts SET attempted_at=?,status=? WHERE id=?')
                 ->execute([now(), 'PENDING', $alertId]);
-            $db->commit();
+            self::commitUnitOfWork($db, $savepoint);
             return $alert;
         } catch (Throwable $e) {
-            if ($db->inTransaction()) {
-                $db->rollBack();
-            }
+            self::rollbackUnitOfWork($db, $savepoint);
             throw $e;
         }
     }
