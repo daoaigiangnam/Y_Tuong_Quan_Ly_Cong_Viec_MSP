@@ -10,6 +10,12 @@ $user = getenv('MSP_TEST_DB_USER') ?: 'root';
 $pass = getenv('MSP_TEST_DB_PASSWORD') ?: 'root';
 $db = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+// The migration must seed the standard CI types used by the CMDB module.
+$types = (int)$db->query('SELECT COUNT(*) FROM cmdb_ci_types WHERE is_active = 1')->fetchColumn();
+if ($types < 8) {
+    throw new RuntimeException('CMDB CI type seed is incomplete.');
+}
+
 // Seed a deterministic customer fixture. Do not depend on LAST_INSERT_ID()
 // after ON DUPLICATE KEY UPDATE; explicitly read the id back by unique code.
 $seed = $db->prepare(
@@ -42,6 +48,8 @@ $ci1 = $service->createCi([
     'name'=>'CMDB-TEST-APP01',
     'status'=>'PLANNED',
     'criticality'=>'HIGH',
+    'customer_visible'=>true,
+    'metadata_json'=>['role'=>'application','tier'=>1],
 ]);
 $ci2 = $service->createCi([
     'customer_id'=>$customerId,
@@ -50,16 +58,65 @@ $ci2 = $service->createCi([
     'status'=>'ACTIVE',
 ]);
 
+if ($ci1 <= 0 || $ci2 <= 0 || $ci1 === $ci2) {
+    throw new RuntimeException('CI creation failed.');
+}
+
+$ci = $db->prepare('SELECT customer_id, ci_type, name, status, criticality, customer_visible, metadata_json FROM cmdb_cis WHERE id=?');
+$ci->execute([$ci1]);
+$row = $ci->fetch(PDO::FETCH_ASSOC);
+if (!$row) throw new RuntimeException('Created CI cannot be read back.');
+if ((int)$row['customer_id'] !== $customerId) throw new RuntimeException('CI customer mismatch.');
+if ($row['ci_type'] !== 'SERVER' || $row['name'] !== 'CMDB-TEST-APP01') throw new RuntimeException('CI identity fields mismatch.');
+if ($row['status'] !== 'PLANNED' || $row['criticality'] !== 'HIGH') throw new RuntimeException('CI initial state mismatch.');
+if ((int)$row['customer_visible'] !== 1) throw new RuntimeException('Customer visibility was not persisted.');
+$metadata = json_decode((string)$row['metadata_json'], true);
+if (!is_array($metadata) || ($metadata['role'] ?? null) !== 'application' || ($metadata['tier'] ?? null) !== 1) {
+    throw new RuntimeException('CI metadata was not persisted.');
+}
+
 $service->transition($ci1, 'ACTIVE');
 $rel = $service->addRelationship($ci1, $ci2, 'USES');
 
 if ($rel <= 0) throw new RuntimeException('Relationship was not created.');
+
 $status = $db->prepare('SELECT status FROM cmdb_cis WHERE id=?');
 $status->execute([$ci1]);
 if ($status->fetchColumn() !== 'ACTIVE') throw new RuntimeException('CI transition failed.');
 
-$audit = $db->prepare('SELECT COUNT(*) FROM cmdb_ci_audit WHERE ci_id=?');
+$relationship = $db->prepare('SELECT source_ci_id, target_ci_id, relationship_type, status FROM cmdb_ci_relationships WHERE id=?');
+$relationship->execute([$rel]);
+$relRow = $relationship->fetch(PDO::FETCH_ASSOC);
+if (!$relRow) throw new RuntimeException('Relationship cannot be read back.');
+if ((int)$relRow['source_ci_id'] !== $ci1 || (int)$relRow['target_ci_id'] !== $ci2 || $relRow['relationship_type'] !== 'USES') {
+    throw new RuntimeException('Relationship fields mismatch.');
+}
+
+$audit = $db->prepare('SELECT action FROM cmdb_ci_audit WHERE ci_id=? ORDER BY id');
 $audit->execute([$ci1]);
-if ((int)$audit->fetchColumn() < 2) throw new RuntimeException('Audit records missing.');
+$actions = $audit->fetchAll(PDO::FETCH_COLUMN);
+if (count($actions) < 2 || $actions[0] !== 'CREATE' || !in_array('STATUS_CHANGE', $actions, true)) {
+    throw new RuntimeException('Audit records missing or incomplete.');
+}
+
+$invalidTransitionRejected = false;
+try {
+    $service->transition($ci1, 'DISPOSED');
+} catch (DomainException) {
+    $invalidTransitionRejected = true;
+}
+if (!$invalidTransitionRejected) {
+    throw new RuntimeException('Invalid ACTIVE to DISPOSED transition was accepted.');
+}
+
+$invalidRelationshipRejected = false;
+try {
+    $service->addRelationship($ci1, $ci1, 'USES');
+} catch (InvalidArgumentException) {
+    $invalidRelationshipRejected = true;
+}
+if (!$invalidRelationshipRejected) {
+    throw new RuntimeException('Self CI relationship was accepted.');
+}
 
 echo "CMDB MySQL integration tests passed\n";
