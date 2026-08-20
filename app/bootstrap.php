@@ -16,7 +16,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/services/TicketService.php';
+require_once __DIR__ . '/contract_policy.php';
+require_once __DIR__ . '/services/ContractService.php';
 require_once __DIR__ . '/services/ContractAlertService.php';
+require_once __DIR__ . '/services/TicketService.php';
 
 $db = db($config);
