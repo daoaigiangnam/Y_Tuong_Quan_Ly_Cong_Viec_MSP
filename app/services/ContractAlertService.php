@@ -76,6 +76,49 @@ final class ContractAlertService
         return $planned;
     }
 
+    private static function claimAlert(PDO $db, int $alertId, string $todayDate): ?array
+    {
+        $db->beginTransaction();
+        try {
+            $stmt = $db->prepare(
+                'SELECT ca.*,c.contract_no,c.end_date,cu.name customer_name,
+                        COALESCE(cu.email,(SELECT cc.email FROM customer_contacts cc WHERE cc.customer_id=c.customer_id AND cc.is_active=1 ORDER BY cc.is_primary DESC,cc.id ASC LIMIT 1)) customer_email,
+                        uo.email owner_email,ul.email lead_email,us.email sales_email,
+                        r.days_before
+                 FROM contract_alerts ca
+                 JOIN contracts c ON c.id=ca.contract_id
+                 JOIN customers cu ON cu.id=c.customer_id
+                 JOIN contract_alert_rules r ON r.contract_id=c.id AND r.alert_no=ca.alert_no
+                 LEFT JOIN users uo ON uo.id=c.owner_user_id
+                 LEFT JOIN users ul ON ul.id=c.lead_user_id
+                 LEFT JOIN users us ON us.id=c.sales_user_id
+                 WHERE ca.id=?
+                 FOR UPDATE'
+            );
+            $stmt->execute([$alertId]);
+            $alert = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$alert || $alert['sent_at'] !== null) {
+                $db->commit();
+                return null;
+            }
+
+            if ($alert['attempted_at'] !== null && substr((string)$alert['attempted_at'], 0, 10) === $todayDate) {
+                $db->commit();
+                return null;
+            }
+
+            $db->prepare('UPDATE contract_alerts SET attempted_at=?,status=? WHERE id=?')
+                ->execute([now(), 'PENDING', $alertId]);
+            $db->commit();
+            return $alert;
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     private static function recipients(array $alert): array
     {
         $to = trim((string)($alert['customer_email'] ?? ''));
@@ -117,8 +160,12 @@ final class ContractAlertService
         $alerts = self::planDueAlerts($db, $today);
         $results = [];
 
-        foreach ($alerts as $alert) {
-            $alertId = (int)$alert['id'];
+        foreach ($alerts as $candidate) {
+            $alert = self::claimAlert($db, (int)$candidate['id'], $today->format('Y-m-d'));
+            if ($alert === null) {
+                continue;
+            }
+
             $subject = 'CẢNH BÁO HỢP ĐỒNG - Lần ' . (int)$alert['alert_no'] . ' - ' . $alert['contract_no'];
             $body = "Kính gửi Anh/Chị,\n\n"
                 . "Hợp đồng {$alert['contract_no']} - {$alert['customer_name']} sẽ hết hạn ngày {$alert['end_date']}.\n"
@@ -126,9 +173,6 @@ final class ContractAlertService
                 . "Vui lòng kiểm tra kế hoạch gia hạn.\n\nMSP ITSM";
 
             [$to, $cc] = self::recipients($alert);
-            $attemptedAt = now();
-            $db->prepare('UPDATE contract_alerts SET attempted_at=? WHERE id=?')->execute([$attemptedAt, $alertId]);
-
             $error = null;
             $ok = false;
             if ($to !== '') {
@@ -141,14 +185,14 @@ final class ContractAlertService
             }
 
             $recipientAudit = $to . ($cc !== '' ? ' | CC: ' . $cc : '');
-            $emailLogId = self::logEmail($db, $alertId, $recipientAudit, $subject, $ok, $error);
+            $emailLogId = self::logEmail($db, (int)$alert['id'], $recipientAudit, $subject, $ok, $error);
             $status = $ok ? 'SENT' : 'FAILED';
             $sentAt = $ok ? now() : null;
 
             $update = $db->prepare(
                 'UPDATE contract_alerts SET sent_at=?,status=?,recipient=?,cc=?,error_message=?,email_log_id=? WHERE id=?'
             );
-            $update->execute([$sentAt, $status, $to, $cc ?: null, $error, $emailLogId, $alertId]);
+            $update->execute([$sentAt, $status, $to, $cc ?: null, $error, $emailLogId, (int)$alert['id']]);
 
             $results[] = [
                 'contract' => $alert['contract_no'],
