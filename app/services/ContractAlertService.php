@@ -4,16 +4,12 @@ declare(strict_types=1);
 
 final class ContractAlertService
 {
-    /**
-     * Create the due alert instances for a business date without sending email.
-     * This method is deterministic and is used by integration tests and the scheduler.
-     */
     public static function planDueAlerts(PDO $db, DateTimeImmutable $today): array
     {
         $todayDate = $today->format('Y-m-d');
-        $sql = "SELECT c.id contract_id,c.contract_no,c.customer_id,c.customer_email,
+        $sql = "SELECT c.id contract_id,c.contract_no,c.customer_id,
                        c.end_date,c.owner_user_id,c.lead_user_id,c.sales_user_id,
-                       cu.name customer_name,cu.email customer_email_direct,
+                       cu.name customer_name,cu.email customer_email,
                        uo.email owner_email,ul.email lead_email,us.email sales_email,
                        r.alert_no,r.days_before
                 FROM contracts c
@@ -70,7 +66,6 @@ final class ContractAlertService
                 continue;
             }
 
-            // A failed attempt is retried on a later scheduler run, but never twice on the same day.
             if ($alert['attempted_at'] !== null && substr((string)$alert['attempted_at'], 0, 10) === $todayDate) {
                 continue;
             }
