@@ -24,35 +24,77 @@ jobs:
           --health-retries=10
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           extensions: pdo_mysql
+
       - name: Wait for MySQL
         run: |
-          for i in {1..30}; do mysqladmin ping -h 127.0.0.1 -uroot -proot && exit 0 || sleep 2; done
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && exit 0 || sleep 2
+          done
           exit 1
+
       - name: Install schema
         run: |
+          set -e
           sed \
             -e '/^CREATE DATABASE IF NOT EXISTS msp_itsm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;/d' \
             -e '/^USE msp_itsm;/d' \
-            database/schema.sql | mysql -h 127.0.0.1 -uroot -proot msp_itsm_test
+            database/schema.sql \
+            | mysql -h 127.0.0.1 -uroot -proot msp_itsm_test
+
       - name: Verify test schema
         run: |
-          mysql -h 127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test'" | grep -q '^14$'
-          mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -e "SHOW TABLES LIKE 'customers'; SHOW TABLES LIKE 'tickets';"
+          set -e
+          echo "=== Base test schema tables ==="
+          mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -N -e \
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='msp_itsm_test' ORDER BY table_name;"
+
+          echo "=== Required base tables ==="
+          for table in roles users customers services contracts tickets; do
+            exists=$(mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -N -e \
+              "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test' AND table_name='${table}';")
+            if [ "$exists" != "1" ]; then
+              echo "ERROR: required base table '${table}' is missing"
+              exit 1
+            fi
+          done
+
+          echo "Base schema verification passed."
+
       - name: Install CMDB migration
         run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/migrations/008_cmdb_management.sql
+
+      - name: Verify CMDB schema
+        run: |
+          set -e
+          echo "=== CMDB tables ==="
+          for table in cmdb_ci_types cmdb_cis cmdb_ci_relationships cmdb_ci_audit; do
+            exists=$(mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -N -e \
+              "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test' AND table_name='${table}';")
+            if [ "$exists" != "1" ]; then
+              echo "ERROR: required CMDB table '${table}' is missing"
+              exit 1
+            fi
+            echo "OK: ${table}"
+          done
+
+          echo "CMDB schema verification passed."
+
       - name: PHP Lint
         run: |
           php -l app/cmdb_policy.php
           php -l app/services/CmdbService.php
           php -l tests/cmdb_validation_test.php
           php -l tests/cmdb_service_mysql_test.php
+
       - name: CMDB Validation
         run: php tests/cmdb_validation_test.php
+
       - name: CMDB MySQL Integration
         env:
           MSP_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=msp_itsm_test;charset=utf8mb4
