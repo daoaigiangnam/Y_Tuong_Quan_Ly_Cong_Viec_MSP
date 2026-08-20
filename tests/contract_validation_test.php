@@ -2,31 +2,9 @@
 
 declare(strict_types=1);
 
-function validate_contract(array $data, array $existingCodes = []): array
-{
-    $errors = [];
-    $code = trim((string)($data['contract_code'] ?? ''));
-    $customerId = (int)($data['customer_id'] ?? 0);
-    $type = trim((string)($data['contract_type'] ?? ''));
-    $title = trim((string)($data['title'] ?? ''));
-    $start = trim((string)($data['start_date'] ?? ''));
-    $end = trim((string)($data['end_date'] ?? ''));
-    $types = ['FULL_PACKAGE', 'PER_INCIDENT', 'HOURLY', 'HYBRID'];
+require_once __DIR__ . '/../app/contract_policy.php';
 
-    if ($code === '' || strlen($code) > 50) $errors['contract_code'] = 'invalid';
-    elseif (in_array(strtoupper($code), array_map('strtoupper', $existingCodes), true)) $errors['contract_code'] = 'duplicate';
-    if ($customerId <= 0) $errors['customer_id'] = 'required';
-    if ($title === '' || strlen($title) < 2 || strlen($title) > 200) $errors['title'] = 'invalid';
-    if (!in_array($type, $types, true)) $errors['contract_type'] = 'invalid';
-    $startDate = DateTime::createFromFormat('Y-m-d', $start);
-    $endDate = DateTime::createFromFormat('Y-m-d', $end);
-    if (!$startDate || $startDate->format('Y-m-d') !== $start) $errors['start_date'] = 'invalid';
-    if (!$endDate || $endDate->format('Y-m-d') !== $end) $errors['end_date'] = 'invalid';
-    if ($startDate && $endDate && $endDate < $startDate) $errors['end_date'] = 'before_start';
-    return $errors;
-}
-
-function assert_true(bool $condition, string $message): void
+function contract_assert(bool $condition, string $message): void
 {
     if (!$condition) {
         fwrite(STDERR, "FAIL: {$message}\n");
@@ -36,27 +14,42 @@ function assert_true(bool $condition, string $message): void
 }
 
 $valid = [
-    'contract_code' => 'HD-0001',
     'customer_id' => 1,
     'contract_type' => 'FULL_PACKAGE',
-    'title' => 'Managed IT Support',
     'start_date' => '2026-01-01',
     'end_date' => '2026-12-31',
 ];
-assert_true(validate_contract($valid) === [], 'valid contract passes');
-assert_true(isset(validate_contract($valid, ['HD-0001'])['contract_code']), 'duplicate contract code is rejected');
+
+contract_assert(validate_contract_payload($valid) === [], 'valid contract passes');
+
+$missingCustomer = $valid;
+$missingCustomer['customer_id'] = 0;
+contract_assert(isset(validate_contract_payload($missingCustomer)['customer_id']), 'missing customer is rejected');
+
+$badType = $valid;
+$badType['contract_type'] = 'HOURLY';
+contract_assert(isset(validate_contract_payload($badType)['contract_type']), 'future unsupported type is rejected until Product enables it');
+
 $badDates = $valid;
 $badDates['start_date'] = '2026-12-31';
 $badDates['end_date'] = '2026-01-01';
-assert_true(isset(validate_contract($badDates)['end_date']), 'end date before start date is rejected');
-$badType = $valid;
-$badType['contract_type'] = 'UNKNOWN';
-assert_true(isset(validate_contract($badType)['contract_type']), 'unsupported contract type is rejected');
-$missingCustomer = $valid;
-$missingCustomer['customer_id'] = 0;
-assert_true(isset(validate_contract($missingCustomer)['customer_id']), 'missing customer is rejected');
-$badTitle = $valid;
-$badTitle['title'] = 'X';
-assert_true(isset(validate_contract($badTitle)['title']), 'short title is rejected');
+contract_assert(isset(validate_contract_payload($badDates)['date_range']), 'end date before start date is rejected');
+
+contract_assert(contract_transition_allowed('DRAFT', 'PENDING_SIGN'), 'draft to pending sign');
+contract_assert(contract_transition_allowed('PENDING_SIGN', 'ACTIVE'), 'pending sign to active');
+contract_assert(contract_transition_allowed('ACTIVE', 'EXPIRING'), 'active to expiring');
+contract_assert(contract_transition_allowed('ACTIVE', 'RENEWED'), 'active to renewed');
+contract_assert(!contract_transition_allowed('EXPIRED', 'ACTIVE'), 'expired cannot directly become active');
+contract_assert(!contract_transition_allowed('CANCELLED', 'ACTIVE'), 'cancelled cannot become active');
+
+contract_assert(contract_alert_date('2026-12-31', 90) === '2026-10-02', '90-day alert calculation');
+contract_assert(contract_alert_date('2026-12-31', 60) === '2026-11-01', '60-day alert calculation');
+contract_assert(contract_alert_date('2026-12-31', 30) === '2026-12-01', '30-day alert calculation');
+
+$defaults = default_contract_alert_rules();
+contract_assert(count($defaults) === 3, 'three default alert rules');
+contract_assert($defaults[0]['days_before'] === 90, 'default alert 1');
+contract_assert($defaults[1]['days_before'] === 60, 'default alert 2');
+contract_assert($defaults[2]['days_before'] === 30, 'default alert 3');
 
 echo "Contract validation suite: PASS\n";
