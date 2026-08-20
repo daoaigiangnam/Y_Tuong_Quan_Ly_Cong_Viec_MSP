@@ -11,7 +11,9 @@ on:
       - 'public/contract.php'
       - 'tests/contract_validation_test.php'
       - 'tests/contract_service_mysql_test.php'
+      - 'tests/contract_alert_mysql_test.php'
       - 'database/schema.sql'
+      - 'database/migrations/004_contract_alert_engine.sql'
       - 'docs/15_Module_07_Contract_Management.md'
       - '.github/workflows/contract-tests.yml'
   pull_request:
@@ -22,7 +24,9 @@ on:
       - 'public/contract.php'
       - 'tests/contract_validation_test.php'
       - 'tests/contract_service_mysql_test.php'
+      - 'tests/contract_alert_mysql_test.php'
       - 'database/schema.sql'
+      - 'database/migrations/004_contract_alert_engine.sql'
       - 'docs/15_Module_07_Contract_Management.md'
       - '.github/workflows/contract-tests.yml'
   workflow_dispatch:
@@ -59,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          for f in app/contract_policy.php app/services/ContractService.php app/services/ContractAlertService.php public/contract.php tests/contract_validation_test.php tests/contract_service_mysql_test.php; do
+          for f in app/contract_policy.php app/services/ContractService.php app/services/ContractAlertService.php public/contract.php tests/contract_validation_test.php tests/contract_service_mysql_test.php tests/contract_alert_mysql_test.php; do
             php -l "$f"
           done
 
@@ -67,6 +71,11 @@ jobs:
         env:
           MYSQL_PWD: root
         run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
+
+      - name: Apply contract alert migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/004_contract_alert_engine.sql
 
       - name: Contract validation tests
         run: php tests/contract_validation_test.php
@@ -79,6 +88,15 @@ jobs:
           DB_USER: root
           DB_PASS: root
         run: php tests/contract_service_mysql_test.php
+
+      - name: Contract alert MySQL integration tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/contract_alert_mysql_test.php
 
       - name: Regression PHP lint
         shell: bash
