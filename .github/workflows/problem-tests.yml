@@ -1,0 +1,108 @@
+name: Problem Module Tests
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/problem_policy.php'
+      - 'app/services/ProblemService.php'
+      - 'tests/problem_validation_test.php'
+      - 'tests/problem_service_mysql_test.php'
+      - 'database/migrations/005_problem_management.sql'
+      - 'docs/16_Module_08_Problem_Management.md'
+      - '.github/workflows/problem-tests.yml'
+  pull_request:
+    paths:
+      - 'app/problem_policy.php'
+      - 'app/services/ProblemService.php'
+      - 'tests/problem_validation_test.php'
+      - 'tests/problem_service_mysql_test.php'
+      - 'database/migrations/005_problem_management.sql'
+      - 'docs/16_Module_08_Problem_Management.md'
+      - '.github/workflows/problem-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  problem-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msp_itsm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql
+          coverage: none
+
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          set -e
+          for f in app/problem_policy.php app/services/ProblemService.php tests/problem_validation_test.php tests/problem_service_mysql_test.php; do
+            php -l "$f"
+          done
+
+      - name: Install database schema
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
+
+      - name: Apply customer/user migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/002_customer_user.sql
+
+      - name: Apply ticket hardening migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/003_ticket_request_hardening.sql
+
+      - name: Apply contract alert migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/004_contract_alert_engine.sql
+
+      - name: Apply problem migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/005_problem_management.sql
+
+      - name: Seed reference data
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/seed.sql
+
+      - name: Problem validation tests
+        run: php tests/problem_validation_test.php
+
+      - name: Problem MySQL integration tests
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/problem_service_mysql_test.php
+
+      - name: Regression PHP lint
+        shell: bash
+        run: |
+          set -e
+          find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
