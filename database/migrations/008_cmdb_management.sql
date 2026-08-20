@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS cmdb_ci_types (
 
 CREATE TABLE IF NOT EXISTS cmdb_cis (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    customer_id BIGINT UNSIGNED NOT NULL,
-    service_id BIGINT UNSIGNED NULL,
+    customer_id INT UNSIGNED NOT NULL,
+    service_id INT UNSIGNED NULL,
     ci_type VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(100) NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS cmdb_cis (
     manufacturer VARCHAR(120) NULL,
     model VARCHAR(120) NULL,
     serial_number VARCHAR(120) NULL,
-    owner_user_id BIGINT UNSIGNED NULL,
+    owner_user_id INT UNSIGNED NULL,
     description TEXT NULL,
     criticality VARCHAR(20) NOT NULL DEFAULT 'MEDIUM',
     customer_visible TINYINT(1) NOT NULL DEFAULT 0,
@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS cmdb_cis (
     INDEX idx_cmdb_customer (customer_id),
     INDEX idx_cmdb_service (service_id),
     INDEX idx_cmdb_type_status (ci_type, status),
-    INDEX idx_cmdb_owner (owner_user_id)
+    INDEX idx_cmdb_owner (owner_user_id),
+    CONSTRAINT fk_cmdb_ci_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_cmdb_ci_service FOREIGN KEY (service_id) REFERENCES services(id),
+    CONSTRAINT fk_cmdb_ci_owner FOREIGN KEY (owner_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS cmdb_ci_relationships (
@@ -40,26 +43,28 @@ CREATE TABLE IF NOT EXISTS cmdb_ci_relationships (
     target_ci_id BIGINT UNSIGNED NOT NULL,
     relationship_type VARCHAR(50) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    created_by BIGINT UNSIGNED NULL,
+    created_by INT UNSIGNED NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     retired_at DATETIME NULL,
     UNIQUE KEY uq_cmdb_relationship (source_ci_id, target_ci_id, relationship_type, status),
     INDEX idx_cmdb_rel_source (source_ci_id),
     INDEX idx_cmdb_rel_target (target_ci_id),
     CONSTRAINT fk_cmdb_rel_source FOREIGN KEY (source_ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cmdb_rel_target FOREIGN KEY (target_ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE
+    CONSTRAINT fk_cmdb_rel_target FOREIGN KEY (target_ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cmdb_rel_created_by FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS cmdb_ci_audit (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     ci_id BIGINT UNSIGNED NOT NULL,
     action VARCHAR(50) NOT NULL,
-    actor_user_id BIGINT UNSIGNED NULL,
+    actor_user_id INT UNSIGNED NULL,
     old_data JSON NULL,
     new_data JSON NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_cmdb_audit_ci (ci_id, created_at),
-    CONSTRAINT fk_cmdb_audit_ci FOREIGN KEY (ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE
+    CONSTRAINT fk_cmdb_audit_ci FOREIGN KEY (ci_id) REFERENCES cmdb_cis(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cmdb_audit_actor FOREIGN KEY (actor_user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
 INSERT IGNORE INTO cmdb_ci_types (code, name) VALUES
