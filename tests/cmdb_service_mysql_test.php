@@ -10,10 +10,15 @@ $user = getenv('MSP_TEST_DB_USER') ?: 'root';
 $pass = getenv('MSP_TEST_DB_PASSWORD') ?: 'root';
 $db = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+// Seed a deterministic customer fixture. Do not depend on LAST_INSERT_ID()
+// after ON DUPLICATE KEY UPDATE; explicitly read the id back by unique code.
 $seed = $db->prepare(
     'INSERT INTO customers (code, name, email, status, created_at)
      VALUES (?, ?, ?, ?, NOW())
-     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)'
+     ON DUPLICATE KEY UPDATE
+        name = VALUES(name),
+        email = VALUES(email),
+        status = VALUES(status)'
 );
 $seed->execute([
     'CMDB-TEST-CUSTOMER',
@@ -21,8 +26,13 @@ $seed->execute([
     'cmdb-test@example.invalid',
     'ACTIVE',
 ]);
-$customerId = (int)$db->lastInsertId();
-if ($customerId <= 0) throw new RuntimeException('CMDB test customer seed failed.');
+
+$customer = $db->prepare('SELECT id FROM customers WHERE code = ? LIMIT 1');
+$customer->execute(['CMDB-TEST-CUSTOMER']);
+$customerId = (int)$customer->fetchColumn();
+if ($customerId <= 0) {
+    throw new RuntimeException('CMDB test customer seed failed.');
+}
 
 $service = new CmdbService($db);
 
