@@ -4,7 +4,19 @@
 
 ## Mục tiêu
 
-Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Ticket → SLA → IT Owner → IT Support → Customer Confirmation/Reopen → Escalation.
+Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Ticket → SLA → Service Owner → Service Agent → Customer Confirmation/Reopen → Escalation.
+
+## Kiến trúc Portal đã chốt
+
+Sản phẩm có **một Shared Design System nhưng hai experience**:
+
+- **Service Portal**: portal dùng chung cho toàn bộ team Công ty Dịch vụ có quyền vận hành dịch vụ — IT Owner, IT Support, IT Lead và các team/role khác như Network, Security, Application, Onsite, Sales, Contract Admin... tùy phân quyền.
+- **Customer Portal**: giao diện riêng cho khách hàng.
+- Hai portal dùng chung Ticket domain/service và cùng một MySQL source of truth.
+- UI component, status, timeline, table, form và visual language thống nhất; navigation, field visibility, action và dashboard thay đổi theo role/scope.
+- Bitrix24 REST **để mở cho giai đoạn sau**, không phải dependency của core product.
+
+Chi tiết: [06 — Portal Architecture: Shared UI/UX](docs/06_Portal_Architecture_Shared_UIUX.md)
 
 ## Tài liệu nghiệp vụ
 
@@ -13,6 +25,7 @@ Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Tic
 - [03 — Data Model & Technical Blueprint](docs/03_Data_Model_Technical_Blueprint.md)
 - [04 — Traceability & Acceptance Criteria](docs/04_Traceability_Acceptance_Criteria.md)
 - [05 — Open Questions & Implementation Phases](docs/05_Open_Questions_Phases.md)
+- [06 — Portal Architecture: Shared UI/UX](docs/06_Portal_Architecture_Shared_UIUX.md)
 
 ## Code hiện tại
 
@@ -29,7 +42,7 @@ Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Tic
 ### Chức năng đã có trong skeleton chạy được
 
 - Login/logout, session, password hashing
-- RBAC: Admin, Customer, IT Owner, IT Support, IT Lead, Sales
+- RBAC nền tảng
 - Customer Portal dashboard cơ bản
 - Ticket create/list/detail
 - Ticket assignment
@@ -37,7 +50,7 @@ Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Tic
 - Public/internal comments
 - Ticket state transition
 - Customer Confirm / Reopen
-- Reopen counter + email alert cho IT Owner/IT Lead/Support
+- Reopen counter + email alert
 - Contract list/detail
 - Contract Alert Rule #1/#2/#3
 - Contract Alert History
@@ -115,12 +128,7 @@ Apache/Nginx cần cho phép PHP-FPM xử lý `public/index.php`.
 
 ### 5. Khởi tạo user
 
-Mở `/install.php` một lần sau khi import DB. Mặc định tạo:
-
-```text
-admin / ChangeMe123!
-customer / Customer123!
-```
+Mở `/install.php` một lần sau khi import DB. Mặc định tạo user demo theo seed/install script.
 
 **Đổi password ngay và xóa `install.php` trước production.**
 
@@ -134,16 +142,29 @@ Chạy mỗi ngày, ví dụ 08:00:
 
 ## Kiến trúc dữ liệu
 
-ITSM là System of Record. Bitrix24 chỉ nên là lớp Internal Collaboration/Task Execution khi tích hợp API. Không tạo hai Ticket độc lập sống song song.
+ITSM là System of Record. Customer Portal và Service Portal cùng làm việc trên một Ticket domain/database. Bitrix24 chỉ là **integration option** cho Internal Collaboration/Task Execution trong tương lai; không tạo hai Ticket độc lập sống song song.
+
+## Quy tắc phát triển
+
+Mỗi module phải hoàn thành theo chu trình:
+
+```text
+Analysis → Code → PHP Lint → Functional Test → GitHub Actions PASS → Commit → Module DONE
+```
+
+Không chuyển module tiếp theo nếu module hiện tại chưa PASS.
 
 ## Lộ trình tiếp theo
 
-1. Hoàn thiện SLA engine và due_at tự động theo Contract/Service/Priority.
-2. Attachment upload + antivirus/storage policy.
-3. Contract CRUD + renewal workflow.
-4. Email template/configuration + SMTP provider/queue.
-5. Customer Portal UI hoàn chỉnh.
-6. IT Owner / IT Support / IT Lead dashboards nâng cao.
-7. Bitrix24 REST integration.
-8. Problem / Change / Knowledge Base / CMDB.
-9. Automated tests, CI/CD, security hardening.
+1. Hoàn thiện Service Portal shell + Customer Portal shell trên Shared Design System.
+2. Hoàn thiện RBAC + object-level/customer scope + field visibility.
+3. Hoàn thiện Customer + Contacts.
+4. Hoàn thiện Service Catalog + SLA mapping.
+5. Hoàn thiện Contract CRUD + renewal workflow.
+6. Hoàn thiện Ticket + SLA + assignment + escalation trên Service Portal.
+7. Hoàn thiện Customer Portal Ticket experience + Confirm/Reopen.
+8. Email template/configuration + SMTP provider/queue.
+9. Dashboards theo role và reporting.
+10. Bitrix24 REST integration — **future / optional**.
+11. Problem / Change / Knowledge Base / CMDB.
+12. Automated tests, CI/CD, security hardening.
