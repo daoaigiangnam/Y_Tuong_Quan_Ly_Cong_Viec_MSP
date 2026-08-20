@@ -36,6 +36,7 @@ final class CmdbService
 
     public function transition(int $id, string $to, ?int $actorUserId = null): void
     {
+        $to = strtoupper(trim($to));
         $this->db->beginTransaction();
         try {
             $stmt = $this->db->prepare('SELECT status FROM cmdb_cis WHERE id = ? FOR UPDATE');
@@ -44,9 +45,9 @@ final class CmdbService
             if (!$row) throw new RuntimeException('CI not found.');
             if (!cmdb_transition_allowed((string)$row['status'], $to)) throw new DomainException('CI transition not allowed.');
             $update = $this->db->prepare('UPDATE cmdb_cis SET status = ? WHERE id = ?');
-            $update->execute([strtoupper($to), $id]);
+            $update->execute([$to, $id]);
             $audit = $this->db->prepare('INSERT INTO cmdb_ci_audit (ci_id, action, actor_user_id, old_data, new_data) VALUES (?, ?, ?, ?, ?)');
-            $audit->execute([$id, 'STATUS_CHANGE', $actorUserId, json_encode(['status'=>$row['status']]), json_encode(['status'=>strtoupper($to)])]);
+            $audit->execute([$id, 'STATUS_CHANGE', $actorUserId, json_encode(['status'=>$row['status']]), json_encode(['status'=>$to])]);
             $this->db->commit();
         } catch (Throwable $e) {
             if ($this->db->inTransaction()) $this->db->rollBack();
