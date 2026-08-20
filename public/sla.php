@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 /**
  * Module 04 — SLA Policy Management
- * Thin validation/demo endpoint for the current development stage.
+ * Pure validation/demo endpoint for the current development stage.
+ *
+ * This file intentionally has no database/bootstrap dependency so that
+ * validation tests can run in GitHub Actions without external infrastructure.
  */
-
-require_once __DIR__ . '/../app/bootstrap.php';
 
 function validateSlaPolicy(array $data): array
 {
