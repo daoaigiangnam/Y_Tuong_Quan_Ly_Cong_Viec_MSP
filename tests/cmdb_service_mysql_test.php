@@ -114,6 +114,51 @@ if (!$orphanRelationshipRejected) {
     throw new RuntimeException('Relationship to a non-existent CI was accepted.');
 }
 
+// Database-level foreign keys must also protect CI ownership references.
+$orphanCustomerRejected = false;
+try {
+    $service->createCi([
+        'customer_id'=>999999999,
+        'ci_type'=>'SERVER',
+        'name'=>'CMDB-TEST-ORPHAN-CUSTOMER',
+    ]);
+} catch (PDOException) {
+    $orphanCustomerRejected = true;
+}
+if (!$orphanCustomerRejected) {
+    throw new RuntimeException('CI with a non-existent customer was accepted.');
+}
+
+$orphanServiceRejected = false;
+try {
+    $service->createCi([
+        'customer_id'=>$customerId,
+        'service_id'=>999999999,
+        'ci_type'=>'SERVER',
+        'name'=>'CMDB-TEST-ORPHAN-SERVICE',
+    ]);
+} catch (PDOException) {
+    $orphanServiceRejected = true;
+}
+if (!$orphanServiceRejected) {
+    throw new RuntimeException('CI with a non-existent service was accepted.');
+}
+
+$orphanOwnerRejected = false;
+try {
+    $service->createCi([
+        'customer_id'=>$customerId,
+        'owner_user_id'=>999999999,
+        'ci_type'=>'SERVER',
+        'name'=>'CMDB-TEST-ORPHAN-OWNER',
+    ]);
+} catch (PDOException) {
+    $orphanOwnerRejected = true;
+}
+if (!$orphanOwnerRejected) {
+    throw new RuntimeException('CI with a non-existent owner was accepted.');
+}
+
 $audit = $db->prepare('SELECT action FROM cmdb_ci_audit WHERE ci_id=? ORDER BY id');
 $audit->execute([$ci1]);
 $actions = $audit->fetchAll(PDO::FETCH_COLUMN);
