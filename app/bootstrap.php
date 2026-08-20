@@ -19,10 +19,12 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/contract_policy.php';
 require_once __DIR__ . '/problem_policy.php';
 require_once __DIR__ . '/change_policy.php';
+require_once __DIR__ . '/knowledge_policy.php';
 require_once __DIR__ . '/services/ContractService.php';
 require_once __DIR__ . '/services/ContractAlertService.php';
 require_once __DIR__ . '/services/TicketService.php';
 require_once __DIR__ . '/services/ProblemService.php';
 require_once __DIR__ . '/services/ChangeService.php';
+require_once __DIR__ . '/services/KnowledgeService.php';
 
 $db = db($config);
