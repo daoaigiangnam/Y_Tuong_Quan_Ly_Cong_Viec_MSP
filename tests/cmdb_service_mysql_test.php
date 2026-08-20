@@ -10,9 +10,21 @@ $user = getenv('MSP_TEST_DB_USER') ?: 'root';
 $pass = getenv('MSP_TEST_DB_PASSWORD') ?: 'root';
 $db = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+$seed = $db->prepare(
+    'INSERT INTO customers (code, name, email, status, created_at)
+     VALUES (?, ?, ?, ?, NOW())
+     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)'
+);
+$seed->execute([
+    'CMDB-TEST-CUSTOMER',
+    'CMDB Integration Test Customer',
+    'cmdb-test@example.invalid',
+    'ACTIVE',
+]);
+$customerId = (int)$db->lastInsertId();
+if ($customerId <= 0) throw new RuntimeException('CMDB test customer seed failed.');
+
 $service = new CmdbService($db);
-$customerId = (int)$db->query('SELECT id FROM customers ORDER BY id LIMIT 1')->fetchColumn();
-if ($customerId <= 0) throw new RuntimeException('No customer seed available.');
 
 $ci1 = $service->createCi([
     'customer_id'=>$customerId,
