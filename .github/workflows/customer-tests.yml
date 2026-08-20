@@ -1,0 +1,21 @@
+name: Customer Module Tests
+
+on:
+  push:
+    branches: [feature/php-mysql-msp-platform]
+  pull_request:
+    branches: [feature/php-mysql-msp-platform]
+
+jobs:
+  customer-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: PHP syntax check - Customer module
+        run: php -l public/customer.php
+      - name: Customer validation tests
+        run: php tests/customer_validation_test.php
