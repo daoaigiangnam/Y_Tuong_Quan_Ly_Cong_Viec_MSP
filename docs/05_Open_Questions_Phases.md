@@ -2,58 +2,152 @@
 
 ## 1. Những quyết định cần BOD/Product chốt
 
-1. Contract type chính thức: Full Package / Per Incident / Hourly / Hybrid?
-2. SLA theo Service hay theo Contract + Service?
-3. Customer có được chọn Priority không?
-4. Resolved → Closed có auto-close sau bao nhiêu ngày nếu Customer không phản hồi?
-5. Alert schedule mặc định là 90/60/30 hay cấu hình theo Contract?
-6. Email Customer có bắt buộc ở cả 3 mốc hay chỉ Internal?
-7. Có cho phép nhiều IT Owner theo từng Service không?
-8. Ticket có tạo Bitrix Task tự động cho mọi ticket hay chỉ ticket cần thực thi?
-9. Có cần Billing/Timesheet cho Pay-per-Incident ngay Phase 1 không?
-10. Customer có được xem file hợp đồng PDF trực tiếp không?
+Các câu hỏi dưới đây **không phải blocker để xây Core Product**. Chúng được thiết kế như business policies có thể cấu hình sau khi Product đã chạy.
 
-## 2. Phases
+Chi tiết kiến trúc cấu hình xem: [07 — Configuration-Driven Business Decisions](07_Configuration_Decisions.md).
 
-### Phase 0 — Foundation
+| # | Quyết định | Policy/Configuration |
+|---|---|---|
+| 1 | Contract type: Full Package / Per Incident / Hourly / Hybrid? | `contract_types` |
+| 2 | SLA theo Service hay Contract + Service? | `sla_scope_policy` |
+| 3 | Customer có được chọn Priority? | `customer_priority_mode` |
+| 4 | Resolved → Closed auto-close sau bao nhiêu ngày? | `auto_close_enabled` + `customer_response_days` |
+| 5 | Alert mặc định 90/60/30 hay theo Contract? | Alert Profile + Contract Override |
+| 6 | Email Customer ở cả 3 mốc hay chỉ Internal? | Alert Recipient Policy |
+| 7 | Có nhiều IT Owner theo từng Service? | Service Assignment Policy |
+| 8 | Có tạo Task khi IT Owner gán Support? | Task Creation Policy |
+| 9 | Billing/Timesheet Phase 1? | Feature Flags + Billing Policy |
+| 10 | Customer xem PDF hợp đồng? | Contract Document Visibility Policy |
 
-Customer, User, Role, Service, Contract, Portal authentication.
+### Nguyên tắc chốt
 
-### Phase 1 — Ticket Core
+BOD/Product có thể chốt từng policy theo thời điểm kinh doanh. Product không được hard-code các giá trị trên vào Ticket/Contract engine.
 
-Create, assignment, timeline, comments, attachments, resolve, confirm, reopen.
+```text
+BOD/Product Decision
+        ↓
+Configuration / Policy
+        ↓
+Effective Date / Version
+        ↓
+Business Engine
+        ↓
+Audit Log
+```
 
-### Phase 2 — SLA & Notification
+---
 
-SLA timers, escalation, email event engine, audit, email log.
+## 2. Implementation Phases
 
-### Phase 3 — Contract Alert
+### Phase 1 — Foundation
 
-Alert rules, 3 alert instances, scheduler, retry, dashboard, renewal history.
+- Authentication
+- RBAC
+- Customer
+- Contact
+- Service
+- Contract core
+- Configuration framework
+- Audit
 
-### Phase 4 — Management Dashboard
+### Phase 2 — Contract
 
-Customer, IT Owner, IT Lead, Sales, contract risk, service performance.
+- Contract CRUD
+- Contract Types
+- Contract Services
+- Owners / Sales
+- Contract Documents
+- Renewal
+- Alert Profiles
+- Alert History
 
-### Phase 5 — Bitrix24
+### Phase 3 — Ticket
 
-Task synchronization, mapping, retry, integration dashboard.
+- Ticket CRUD
+- Assignment
+- Queue
+- State Machine
+- Timeline
+- Public/Internal Comments
+- Attachments
+- Reopen
+- Escalation
 
-### Phase 6 — MSP Advanced
+### Phase 4 — SLA
 
-Problem, Change, CMDB, Knowledge Base, billing/time tracking, automation/AI.
+- SLA Policies
+- Contract + Service SLA
+- Response/Resolution timers
+- Warning/Breach
+- SLA dashboard
 
-## 3. Definition of Done — MVP
+### Phase 5 — Portals
 
-MVP được coi là đạt khi:
+- Shared Design System
+- Customer Portal
+- Service Portal
+- Role/Permission/Scope-driven navigation
+- Shared Ticket UI with role-specific visibility/actions
 
-- Customer tạo được Ticket.
-- Ticket đi đúng IT Owner.
-- IT Owner assign đúng Support.
-- Support xử lý và Resolve.
-- Customer confirm hoặc Reopen.
-- Reopen tạo escalation.
-- Contract được quản lý và hiển thị đúng scope.
-- 3 alert hoạt động, có log, không gửi trùng.
-- Dashboard cho IT Owner/Lead hoạt động.
-- Audit đầy đủ cho các event chính.
+### Phase 6 — Notification
+
+- Email templates
+- SMTP/provider abstraction
+- Email queue
+- Retry
+- Ticket notifications
+- Contract alerts
+- Reopen alerts
+
+### Phase 7 — Optional Integrations
+
+Bitrix24 REST is **not part of the Core Product/MVP**.
+
+Integration boundary will remain available for future:
+
+```text
+ITSM Ticket
+    ↕ adapter/API
+Bitrix24 Task
+```
+
+Ticket remains System of Record.
+
+### Phase 8 — Advanced ITSM
+
+- Problem
+- Change
+- Knowledge Base
+- CMDB
+- Reporting
+- Billing/Timesheet if business policy is enabled
+
+---
+
+## 3. Definition of Done per Phase
+
+Một Phase chỉ được chuyển trạng thái `DONE` khi:
+
+- PHP lint PASS
+- Database migration PASS
+- Functional tests PASS
+- Permission tests PASS
+- Business rules PASS
+- UI/UX checks PASS
+- Regression PASS
+- GitHub Actions GREEN
+- Audit/logging PASS nếu có data mutation
+
+```text
+CODE
+ ↓
+LINT
+ ↓
+TEST
+ ↓
+GITHUB PASS
+ ↓
+COMMIT
+ ↓
+NEXT PHASE
+```
