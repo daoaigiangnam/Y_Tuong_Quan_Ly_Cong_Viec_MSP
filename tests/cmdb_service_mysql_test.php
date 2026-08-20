@@ -75,7 +75,8 @@ if (!is_array($metadata) || ($metadata['role'] ?? null) !== 'application' || ($m
     throw new RuntimeException('CI metadata was not persisted.');
 }
 
-$service->transition($ci1, 'ACTIVE');
+// Transition input is case-insensitive at the service boundary.
+$service->transition($ci1, 'active');
 $rel = $service->addRelationship($ci1, $ci2, 'USES');
 
 if ($rel <= 0) throw new RuntimeException('Relationship was not created.');
