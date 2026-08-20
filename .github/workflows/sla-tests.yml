@@ -1,0 +1,61 @@
+name: SLA Module Tests
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+  pull_request:
+    branches:
+      - feature/php-mysql-msp-platform
+
+jobs:
+  lint:
+    name: PHP Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Syntax check SLA module
+        run: php -l public/sla.php
+
+  validation:
+    name: SLA Validation Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Run SLA validation tests
+        run: php tests/sla_validation_test.php
+
+  regression:
+    name: Regression PHP Lint
+    runs-on: ubuntu-latest
+    needs: validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Lint application PHP
+        run: |
+          set -e
+          find app public tests -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do
+            php -l "$file"
+          done
