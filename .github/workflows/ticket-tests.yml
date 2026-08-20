@@ -46,6 +46,11 @@ jobs:
           MYSQL_PWD: root
         run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
 
+      - name: Apply Ticket hardening migration
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/migrations/003_ticket_request_hardening.sql
+
       - name: Ticket Validation Tests
         run: php tests/ticket_validation_test.php
 
