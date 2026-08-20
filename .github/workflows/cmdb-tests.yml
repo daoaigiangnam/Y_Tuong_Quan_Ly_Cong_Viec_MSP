@@ -41,7 +41,7 @@ jobs:
             database/schema.sql | mysql -h 127.0.0.1 -uroot -proot msp_itsm_test
       - name: Verify test schema
         run: |
-          mysql -h 127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test'" | grep -q '^13$'
+          mysql -h 127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='msp_itsm_test'" | grep -q '^14$'
           mysql -h 127.0.0.1 -uroot -proot msp_itsm_test -e "SHOW TABLES LIKE 'customers'; SHOW TABLES LIKE 'tickets';"
       - name: Install CMDB migration
         run: mysql -h 127.0.0.1 -uroot -proot msp_itsm_test < database/migrations/008_cmdb_management.sql
