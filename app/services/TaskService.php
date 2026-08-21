@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../task_policy.php';
+
 final class TaskService
 {
     private const TRANSITIONS = [
@@ -49,6 +51,31 @@ final class TaskService
             self::history($db, $taskId, $actorUserId, 'ASSIGNED', (string)$data['assignee_user_id'], 'Task assigned on creation');
         }
         return $taskId;
+    }
+
+    public static function createForTicketAssignment(PDO $db, int $ticketId, int $assigneeUserId, int $actorUserId, array $policy): ?int
+    {
+        if (!TaskPolicy::shouldCreateOnAssignment($policy, $ticketId, $assigneeUserId)) {
+            return null;
+        }
+
+        $stmt = $db->prepare('SELECT ticket_no,subject,description,priority FROM tickets WHERE id=:id');
+        $stmt->execute([':id' => $ticketId]);
+        $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$ticket) {
+            throw new RuntimeException('Ticket not found.');
+        }
+
+        $taskNo = 'TSK-' . $ticket['ticket_no'] . '-' . date('YmdHis');
+        return self::create($db, [
+            'task_no' => $taskNo,
+            'ticket_id' => $ticketId,
+            'title' => 'Support: ' . $ticket['subject'],
+            'description' => $ticket['description'],
+            'priority' => $ticket['priority'],
+            'status' => 'ASSIGNED',
+            'assignee_user_id' => $assigneeUserId,
+        ], $actorUserId);
     }
 
     public static function assign(PDO $db, int $taskId, int $assigneeUserId, int $actorUserId): void
