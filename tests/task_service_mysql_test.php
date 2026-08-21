@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/services/TaskService.php';
+require_once __DIR__ . '/../app/task_policy.php';
 
 $host = getenv('DB_HOST') ?: '127.0.0.1';
 $port = getenv('DB_PORT') ?: '3306';
@@ -52,17 +53,20 @@ try {
         $ticketId = (int)$db->query("SELECT id FROM tickets WHERE ticket_no='TCK-TASK-TEST'")->fetchColumn();
     }
 
-    $taskId = TaskService::create($db, [
-        'task_no' => 'TSK-TEST-001',
-        'ticket_id' => $ticketId,
-        'title' => 'Investigate assigned ticket',
-        'description' => 'Task generated for support assignment.',
-        'priority' => 'P2',
-        'assignee_user_id' => $assigneeId,
-        'due_at' => date('Y-m-d H:i:s', time() + 3600),
-    ], $userId);
+    $enabledPolicy = TaskPolicy::normalize(['enabled' => true, 'trigger_event' => 'TICKET_ASSIGNMENT']);
+    $taskId = TaskService::createForTicketAssignment($db, $ticketId, $assigneeId, $userId, $enabledPolicy);
+    if ($taskId === null) {
+        throw new RuntimeException('Enabled assignment policy did not create a Task.');
+    }
 
-    TaskService::assign($db, $taskId, $assigneeId, $userId);
+    $disabledBefore = (int)$db->query('SELECT COUNT(*) FROM tasks')->fetchColumn();
+    $disabledPolicy = TaskPolicy::normalize(['enabled' => false, 'trigger_event' => 'TICKET_ASSIGNMENT']);
+    $disabledTaskId = TaskService::createForTicketAssignment($db, $ticketId, $assigneeId, $userId, $disabledPolicy);
+    $disabledAfter = (int)$db->query('SELECT COUNT(*) FROM tasks')->fetchColumn();
+    if ($disabledTaskId !== null || $disabledAfter !== $disabledBefore) {
+        throw new RuntimeException('Disabled assignment policy created an unexpected Task.');
+    }
+
     TaskService::transition($db, $taskId, 'IN_PROGRESS', $assigneeId);
     TaskService::transition($db, $taskId, 'DONE', $assigneeId);
 
@@ -72,6 +76,9 @@ try {
     }
     if ($task['started_at'] === null || $task['completed_at'] === null) {
         throw new RuntimeException('Task timestamps were not persisted.');
+    }
+    if ($task['title'] !== 'Support: Task integration ticket' || $task['priority'] !== 'P2') {
+        throw new RuntimeException('Ticket-to-Task mapping failed.');
     }
 
     $history = (int)$db->query('SELECT COUNT(*) FROM task_history WHERE task_id=' . $taskId)->fetchColumn();
