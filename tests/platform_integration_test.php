@@ -18,9 +18,12 @@ $db = new PDO("mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4", 
 
 $requiredTables = [
     'roles','users','customers','services','contracts','contract_services',
-    'tickets','ticket_comments','ticket_history','problems','problem_tickets',
-    'changes','change_history','knowledge_articles','cmdb_ci_types','cmdb_cis',
-    'cmdb_ci_relationships','tasks','task_history','task_policies'
+    'tickets','ticket_comments','ticket_history',
+    'problems','problem_tickets',
+    'changes','change_history','change_tickets','change_problems',
+    'knowledge_articles','knowledge_history','knowledge_links',
+    'cmdb_ci_types','cmdb_cis','cmdb_ci_relationships',
+    'tasks','task_history','task_policies'
 ];
 
 foreach ($requiredTables as $table) {
@@ -80,6 +83,42 @@ try {
     $db->prepare('INSERT INTO cmdb_ci_relationships(source_ci_id,target_ci_id,relationship_type,created_by) VALUES(?,?,?,?)')
         ->execute([$ciB, $ciA, 'RUNS_ON', $ownerId]);
 
+    $db->prepare("INSERT INTO changes(change_no,title,description,change_type,priority,risk,impact,status,customer_id,service_id,requester_user_id,owner_user_id,approver_user_id,implementation_plan,rollback_plan,test_plan,success_criteria,reason,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())")
+        ->execute([
+            'INT-CHANGE', 'Integration Change',
+            'Change created by platform end-to-end integration test',
+            'NORMAL', 'P2', 'MEDIUM', 'MEDIUM', 'DRAFT',
+            $customerId, $serviceId, $ownerId, $ownerId, $ownerId,
+            'Apply controlled test change', 'Rollback the controlled test change',
+            'Execute automated integration assertions',
+            'Change record and relationships persist correctly',
+            'Validate Ticket -> Problem -> Change -> CMDB traceability',
+            $ownerId
+        ]);
+    $changeId = (int)$db->lastInsertId();
+    $db->prepare('INSERT INTO change_tickets(change_id,ticket_id,linked_by_user_id,linked_at) VALUES(?,?,?,NOW())')
+        ->execute([$changeId, $ticketId, $ownerId]);
+    $db->prepare('INSERT INTO change_problems(change_id,problem_id,linked_by_user_id,linked_at) VALUES(?,?,?,NOW())')
+        ->execute([$changeId, $problemId, $ownerId]);
+    $db->prepare('INSERT INTO change_history(change_id,user_id,event,value,note,created_at) VALUES(?,?,?,?,?,NOW())')
+        ->execute([$changeId, $ownerId, 'CREATED', 'DRAFT', 'Integration test change created']);
+
+    $db->prepare("INSERT INTO knowledge_articles(article_no,title,slug,summary,body,category,visibility,status,customer_id,service_id,owner_user_id,reviewer_user_id,created_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())")
+        ->execute([
+            'INT-KB', 'Integration Knowledge Article', 'integration-knowledge-article',
+            'Knowledge article created by platform integration test',
+            'Documented resolution and change traceability for the integration scenario.',
+            'OPERATIONS', 'INTERNAL', 'PUBLISHED',
+            $customerId, $serviceId, $ownerId, $ownerId, $ownerId
+        ]);
+    $knowledgeId = (int)$db->lastInsertId();
+    $db->prepare('INSERT INTO knowledge_history(article_id,user_id,event,value,note,created_at) VALUES(?,?,?,?,?,NOW())')
+        ->execute([$knowledgeId, $ownerId, 'PUBLISHED', 'PUBLISHED', 'Integration test article published']);
+    $db->prepare('INSERT INTO knowledge_links(article_id,entity_type,entity_id,linked_by_user_id,linked_at) VALUES(?,?,?,?,NOW())')
+        ->execute([$knowledgeId, 'TICKET', $ticketId, $ownerId]);
+    $db->prepare('INSERT INTO knowledge_links(article_id,entity_type,entity_id,linked_by_user_id,linked_at) VALUES(?,?,?,?,NOW())')
+        ->execute([$knowledgeId, 'CHANGE', $changeId, $ownerId]);
+
     $policy = TaskPolicy::normalize(['enabled' => true, 'trigger_event' => 'TICKET_ASSIGNMENT']);
     $taskId = TaskService::createForTicketAssignment($db, $ticketId, $ownerId, $ownerId, $policy);
     if ($taskId === null) {
@@ -98,7 +137,13 @@ try {
         'contract_service' => (int)$db->query("SELECT COUNT(*) FROM contract_services WHERE contract_id={$contractId} AND service_id={$serviceId}")->fetchColumn(),
         'ticket_contract_service' => (int)$db->query("SELECT COUNT(*) FROM tickets WHERE id={$ticketId} AND customer_id={$customerId} AND contract_id={$contractId} AND service_id={$serviceId}")->fetchColumn(),
         'problem_ticket' => (int)$db->query("SELECT COUNT(*) FROM problem_tickets WHERE problem_id={$problemId} AND ticket_id={$ticketId}")->fetchColumn(),
+        'change_ticket' => (int)$db->query("SELECT COUNT(*) FROM change_tickets WHERE change_id={$changeId} AND ticket_id={$ticketId}")->fetchColumn(),
+        'change_problem' => (int)$db->query("SELECT COUNT(*) FROM change_problems WHERE change_id={$changeId} AND problem_id={$problemId}")->fetchColumn(),
+        'change_history' => (int)$db->query("SELECT COUNT(*) FROM change_history WHERE change_id={$changeId}")->fetchColumn(),
         'cmdb_relationship' => (int)$db->query("SELECT COUNT(*) FROM cmdb_ci_relationships WHERE source_ci_id={$ciB} AND target_ci_id={$ciA}")->fetchColumn(),
+        'knowledge_ticket_link' => (int)$db->query("SELECT COUNT(*) FROM knowledge_links WHERE article_id={$knowledgeId} AND entity_type='TICKET' AND entity_id={$ticketId}")->fetchColumn(),
+        'knowledge_change_link' => (int)$db->query("SELECT COUNT(*) FROM knowledge_links WHERE article_id={$knowledgeId} AND entity_type='CHANGE' AND entity_id={$changeId}")->fetchColumn(),
+        'knowledge_history' => (int)$db->query("SELECT COUNT(*) FROM knowledge_history WHERE article_id={$knowledgeId}")->fetchColumn(),
         'task_history' => (int)$db->query("SELECT COUNT(*) FROM task_history WHERE task_id={$taskId}")->fetchColumn(),
     ];
 
@@ -109,7 +154,7 @@ try {
     }
 
     $db->rollBack();
-    echo "Platform end-to-end integration smoke test passed\n";
+    echo "Platform end-to-end integration smoke test passed: Customer -> Contract -> Service -> Ticket -> Problem -> Change -> CMDB -> Task -> Knowledge\n";
 } catch (Throwable $e) {
     $db->rollBack();
     throw $e;
