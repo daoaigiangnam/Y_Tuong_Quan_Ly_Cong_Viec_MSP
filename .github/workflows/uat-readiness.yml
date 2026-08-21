@@ -1,0 +1,55 @@
+name: UAT Readiness Gate
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'docs/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/**'
+      - 'public/**'
+      - 'docs/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  uat-readiness:
+    name: UAT readiness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax gate
+        run: |
+          set -e
+          find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: UAT readiness acceptance gate
+        run: php tests/uat_readiness_test.php
+
+      - name: UAT readiness summary
+        run: |
+          echo "========================================"
+          echo "UAT READINESS GATE PASSED"
+          echo "Technical acceptance baseline present"
+          echo "Module acceptance artifacts present"
+          echo "Runtime entrypoints present"
+          echo "UAT sign-off plan present"
+          echo "========================================"
