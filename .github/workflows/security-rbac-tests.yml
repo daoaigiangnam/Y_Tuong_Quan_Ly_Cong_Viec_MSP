@@ -5,13 +5,17 @@ on:
     branches: [feature/php-mysql-msp-platform]
     paths:
       - 'app/**'
+      - 'public/**'
       - 'tests/security_rbac_cross_module_test.php'
+      - 'tests/security_route_guard_test.php'
       - '.github/workflows/security-rbac-tests.yml'
   pull_request:
     branches: [feature/php-mysql-msp-platform]
     paths:
       - 'app/**'
+      - 'public/**'
       - 'tests/security_rbac_cross_module_test.php'
+      - 'tests/security_route_guard_test.php'
       - '.github/workflows/security-rbac-tests.yml'
 
 jobs:
@@ -23,9 +27,13 @@ jobs:
         with:
           php-version: '8.3'
       - name: PHP syntax check
-        run: php -l tests/security_rbac_cross_module_test.php
+        run: |
+          php -l tests/security_rbac_cross_module_test.php
+          php -l tests/security_route_guard_test.php
       - name: RBAC cross-module policy test
         run: php tests/security_rbac_cross_module_test.php
+      - name: Web route security guard test
+        run: php tests/security_route_guard_test.php
       - name: Regression PHP lint
         run: |
-          find app tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          find app public tests -name '*.php' -print0 | xargs -0 -n1 php -l
