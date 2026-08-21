@@ -60,6 +60,10 @@ $requiredTables = [
     // Commercial / ITSM core
     'contracts', 'contract_services', 'contract_alert_rules', 'contract_alerts',
     'tickets', 'ticket_comments', 'ticket_history',
+    // Problem / Change / Knowledge platform chain
+    'problems', 'problem_tickets', 'problem_history', 'problem_documents',
+    'changes', 'change_history', 'change_tickets', 'change_problems',
+    'knowledge_articles', 'knowledge_history', 'knowledge_links',
     // Platform governance
     'audit_logs', 'email_logs',
     // Task / CMDB added by later modules
@@ -80,6 +84,19 @@ $requiredColumns = [
     ['tickets', 'customer_id'],
     ['tickets', 'contract_id'],
     ['tickets', 'service_id'],
+    ['problems', 'customer_id'],
+    ['problems', 'service_id'],
+    ['problems', 'owner_user_id'],
+    ['changes', 'customer_id'],
+    ['changes', 'service_id'],
+    ['changes', 'owner_user_id'],
+    ['change_tickets', 'ticket_id'],
+    ['change_problems', 'problem_id'],
+    ['knowledge_articles', 'customer_id'],
+    ['knowledge_articles', 'service_id'],
+    ['knowledge_articles', 'status'],
+    ['knowledge_links', 'entity_type'],
+    ['knowledge_links', 'entity_id'],
     ['tasks', 'ticket_id'],
     ['tasks', 'assignee_user_id'],
     ['task_history', 'task_id'],
@@ -118,6 +135,19 @@ $requiredFks = [
     'tickets.customer_id' => 'customers.id',
     'tickets.contract_id' => 'contracts.id',
     'tickets.service_id' => 'services.id',
+    'problems.customer_id' => 'customers.id',
+    'problems.service_id' => 'services.id',
+    'problems.owner_user_id' => 'users.id',
+    'problems.created_by_user_id' => 'users.id',
+    'problem_tickets.problem_id' => 'problems.id',
+    'problem_tickets.ticket_id' => 'tickets.id',
+    'problem_history.problem_id' => 'problems.id',
+    'problem_documents.problem_id' => 'problems.id',
+    'change_history.change_id' => 'changes.id',
+    'change_tickets.change_id' => 'changes.id',
+    'change_problems.change_id' => 'changes.id',
+    'knowledge_history.article_id' => 'knowledge_articles.id',
+    'knowledge_links.article_id' => 'knowledge_articles.id',
     'tasks.ticket_id' => 'tickets.id',
     'tasks.assignee_user_id' => 'users.id',
     'task_history.task_id' => 'tasks.id',
@@ -147,5 +177,4 @@ assertTrue($serviceCount > 0, 'Reference services are missing.');
 assertTrue($cmdbTypeCount >= 8, 'CMDB reference CI types are incomplete.');
 
 echo "Reference data: PASS (roles={$roleCount}, services={$serviceCount}, active_cmdb_types={$cmdbTypeCount})\n";
-
 echo "RELEASE REGRESSION GATE: PASS\n";
