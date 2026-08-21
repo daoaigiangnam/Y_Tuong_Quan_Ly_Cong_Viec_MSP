@@ -44,16 +44,17 @@ $service = new CmdbService($db);
 
 $ci1 = $service->createCi([
     'customer_id'=>$customerId,
-    'ci_type'=>'SERVER',
+    'ci_type'=>'server',
     'name'=>'CMDB-TEST-APP01',
-    'status'=>'PLANNED',
-    'criticality'=>'HIGH',
+    'status'=>'planned',
+    'criticality'=>'high',
+    'environment'=>'prod',
     'customer_visible'=>true,
     'metadata_json'=>['role'=>'application','tier'=>1],
 ]);
 $ci2 = $service->createCi([
     'customer_id'=>$customerId,
-    'ci_type'=>'DATABASE',
+    'ci_type'=>'database',
     'name'=>'CMDB-TEST-DB01',
     'status'=>'ACTIVE',
 ]);
@@ -62,13 +63,13 @@ if ($ci1 <= 0 || $ci2 <= 0 || $ci1 === $ci2) {
     throw new RuntimeException('CI creation failed.');
 }
 
-$ci = $db->prepare('SELECT customer_id, ci_type, name, status, criticality, customer_visible, metadata_json FROM cmdb_cis WHERE id=?');
+$ci = $db->prepare('SELECT customer_id, ci_type, name, status, environment, criticality, customer_visible, metadata_json FROM cmdb_cis WHERE id=?');
 $ci->execute([$ci1]);
 $row = $ci->fetch(PDO::FETCH_ASSOC);
 if (!$row) throw new RuntimeException('Created CI cannot be read back.');
 if ((int)$row['customer_id'] !== $customerId) throw new RuntimeException('CI customer mismatch.');
 if ($row['ci_type'] !== 'SERVER' || $row['name'] !== 'CMDB-TEST-APP01') throw new RuntimeException('CI identity fields mismatch.');
-if ($row['status'] !== 'PLANNED' || $row['criticality'] !== 'HIGH') throw new RuntimeException('CI initial state mismatch.');
+if ($row['status'] !== 'PLANNED' || $row['criticality'] !== 'HIGH' || $row['environment'] !== 'PROD') throw new RuntimeException('CI initial state normalization mismatch.');
 if ((int)$row['customer_visible'] !== 1) throw new RuntimeException('Customer visibility was not persisted.');
 $metadata = json_decode((string)$row['metadata_json'], true);
 if (!is_array($metadata) || ($metadata['role'] ?? null) !== 'application' || ($metadata['tier'] ?? null) !== 1) {
@@ -77,7 +78,7 @@ if (!is_array($metadata) || ($metadata['role'] ?? null) !== 'application' || ($m
 
 // Transition input is case-insensitive at the service boundary.
 $service->transition($ci1, 'active');
-$rel = $service->addRelationship($ci1, $ci2, 'USES');
+$rel = $service->addRelationship($ci1, $ci2, 'uses');
 
 if ($rel <= 0) throw new RuntimeException('Relationship was not created.');
 
