@@ -4,7 +4,7 @@
 
 This document is the final traceability checkpoint for the current `feature/php-mysql-msp-platform` implementation track.
 
-The repository has reached a point where the CI suite covers database integrity, module validation, security hardening, platform integration and release regression. The remaining question is not simply **"do tests pass?"**, but **"can we prove that the documented modules are represented by code and executable tests without silently missing a module or artifact?"**
+The repository has reached a point where the CI suite covers database integrity, module validation, security hardening, platform integration, deployment hardening and release regression. The remaining question is not simply **"do tests pass?"**, but **"can we prove that the documented modules are represented by code and executable tests without silently missing a module or artifact?"**
 
 ## Current release posture
 
@@ -50,7 +50,25 @@ A future documentation cleanup may rename the Task specification, but that renam
 - Platform end-to-end integration test.
 - Platform rollback/cleanup test.
 - Platform negative-path validation test.
+- Deployment hardening regression gate.
+- Release traceability gate.
 - Release regression gate.
+
+## Deployment hardening gate
+
+The engineering baseline now has an executable deployment hardening checkpoint in `tests/deployment_hardening_test.php` with its operational runbook in `docs/22_Deployment_Hardening.md`.
+
+The gate verifies, at source/repository level:
+
+- dedicated `public/` web-root boundary;
+- installer isolation from the public directory;
+- environment-driven database and mail configuration;
+- `.env` protection through Git ignore rules;
+- upload storage isolation;
+- session-cookie hardening;
+- explicit production controls for installer removal/disablement, secrets, backups, logging and rollback.
+
+This is a **deployment-design gate**, not a substitute for infrastructure penetration testing, backup restore testing or production UAT.
 
 ## Remaining release blockers
 
@@ -64,7 +82,7 @@ These are **product-delivery** items rather than another round of synthetic CI t
 6. Complete SMTP provider/queue configuration and operational monitoring.
 7. Complete dashboards/reporting required by BOD/operations.
 8. Execute UAT with representative customer/internal roles.
-9. Perform deployment hardening: secrets, web root, `install.php` removal, backups, logging and rollback procedure.
+9. Perform deployment hardening in the target infrastructure: secrets, web root, `install.php` removal/disablement, backups, logging and rollback procedure.
 10. Keep Bitrix24 integration explicitly optional until the core ITSM system is accepted.
 
 ## Release decision rule
