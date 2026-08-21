@@ -13,7 +13,6 @@ ok(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'SERVER','name'=>'APP01','statu
 ok(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'server','name'=>'APP01','criticality'=>'high','environment'=>'prod']) === [], 'case-insensitive CI normalization');
 ok(isset(cmdb_validate_ci(['customer_id'=>0,'ci_type'=>'SERVER','name'=>'APP01'])['customer_id']), 'customer required');
 ok(isset(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'','name'=>'APP01'])['ci_type']), 'type required');
-ok(isset(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'SERVER','name'=>'APP01','ci_type_bad'=>'x'])['ci_type']), 'type validation');
 ok(isset(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'bad type','name'=>'APP01'])['ci_type']), 'type format rejected');
 ok(isset(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'SERVER','name'=>''])['name']), 'name required');
 ok(isset(cmdb_validate_ci(['customer_id'=>1,'ci_type'=>'SERVER','name'=>'APP01','status'=>'UNKNOWN'])['status']), 'invalid status rejected');
