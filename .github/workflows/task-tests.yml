@@ -9,8 +9,11 @@ on:
       - 'app/services/TaskService.php'
       - 'tests/task_validation_test.php'
       - 'tests/task_service_mysql_test.php'
+      - 'tests/task_ui_smoke_test.php'
       - 'database/migrations/009_task_management.sql'
+      - 'public/tasks.php'
       - 'docs/18_Module_09_Task_Management.md'
+      - 'docs/20_Module_09_Task_UI_UX.md'
       - '.github/workflows/task-tests.yml'
   pull_request:
     paths:
@@ -18,8 +21,11 @@ on:
       - 'app/services/TaskService.php'
       - 'tests/task_validation_test.php'
       - 'tests/task_service_mysql_test.php'
+      - 'tests/task_ui_smoke_test.php'
       - 'database/migrations/009_task_management.sql'
+      - 'public/tasks.php'
       - 'docs/18_Module_09_Task_Management.md'
+      - 'docs/20_Module_09_Task_UI_UX.md'
       - '.github/workflows/task-tests.yml'
   workflow_dispatch:
 
@@ -55,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          for f in app/task_policy.php app/services/TaskService.php tests/task_validation_test.php tests/task_service_mysql_test.php; do
+          for f in app/task_policy.php app/services/TaskService.php tests/task_validation_test.php tests/task_service_mysql_test.php tests/task_ui_smoke_test.php public/tasks.php; do
             php -l "$f"
           done
 
@@ -95,6 +101,9 @@ jobs:
           DB_USER: root
           DB_PASS: root
         run: php tests/task_service_mysql_test.php
+
+      - name: Task UI smoke test
+        run: php tests/task_ui_smoke_test.php
 
       - name: Regression PHP lint
         shell: bash
