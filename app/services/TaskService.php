@@ -27,6 +27,11 @@ final class TaskService
             throw new InvalidArgumentException('Invalid task priority.');
         }
 
+        $status = (string)($data['status'] ?? 'NEW');
+        if (!array_key_exists($status, self::TRANSITIONS)) {
+            throw new InvalidArgumentException("Invalid initial task status: {$status}.");
+        }
+
         $stmt = $db->prepare('INSERT INTO tasks
             (task_no,ticket_id,title,description,priority,status,assignee_user_id,created_by_user_id,due_at,created_at,updated_at)
             VALUES(:task_no,:ticket_id,:title,:description,:priority,:status,:assignee_user_id,:created_by_user_id,:due_at,:created_at,:updated_at)');
@@ -37,7 +42,7 @@ final class TaskService
             ':title' => $title,
             ':description' => $data['description'] ?? null,
             ':priority' => $priority,
-            ':status' => $data['status'] ?? 'NEW',
+            ':status' => $status,
             ':assignee_user_id' => $data['assignee_user_id'] ?? null,
             ':created_by_user_id' => $actorUserId,
             ':due_at' => $data['due_at'] ?? null,
@@ -46,7 +51,7 @@ final class TaskService
         ]);
 
         $taskId = (int)$db->lastInsertId();
-        self::history($db, $taskId, $actorUserId, 'CREATED', $data['status'] ?? 'NEW', 'Task created');
+        self::history($db, $taskId, $actorUserId, 'CREATED', $status, 'Task created');
         if (!empty($data['assignee_user_id'])) {
             self::history($db, $taskId, $actorUserId, 'ASSIGNED', (string)$data['assignee_user_id'], 'Task assigned on creation');
         }
