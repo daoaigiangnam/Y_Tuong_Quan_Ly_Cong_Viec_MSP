@@ -25,7 +25,12 @@ jobs:
           php-version: '8.3'
 
       - name: PHP syntax check
-        run: php -l tests/release_readiness_traceability_test.php
+        run: |
+          php -l tests/release_readiness_traceability_test.php
+          php -l tests/deployment_hardening_test.php
+
+      - name: Deployment hardening gate
+        run: php tests/deployment_hardening_test.php
 
       - name: Release traceability gate
         run: php tests/release_readiness_traceability_test.php
