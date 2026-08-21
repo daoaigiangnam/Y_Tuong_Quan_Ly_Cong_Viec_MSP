@@ -16,6 +16,7 @@ $required = [
     'README.md',
     'docs/04_Traceability_Acceptance_Criteria.md',
     'docs/21_Release_Readiness_Audit.md',
+    'docs/22_Deployment_Hardening.md',
 
     // Module specifications.
     'docs/09_Module_01_Customer_Management.md',
@@ -54,6 +55,7 @@ $required = [
     'tests/platform_integration_test.php',
     'tests/platform_integration_negative_test.php',
     'tests/platform_integration_cleanup_test.php',
+    'tests/deployment_hardening_test.php',
 ];
 
 $missing = [];
@@ -75,6 +77,12 @@ if ($missing !== []) {
 $audit = file_get_contents($root . '/docs/21_Release_Readiness_Audit.md');
 if ($audit === false || strpos($audit, 'Numbering decision') === false) {
     fwrite(STDERR, "RELEASE TRACEABILITY FAILED: numbering decision is not documented.\n");
+    exit(1);
+}
+
+// Ensure deployment hardening is explicitly represented in the release audit.
+if ($audit === false || strpos($audit, 'deployment hardening') === false) {
+    fwrite(STDERR, "RELEASE TRACEABILITY FAILED: deployment hardening gate is not documented.\n");
     exit(1);
 }
 
