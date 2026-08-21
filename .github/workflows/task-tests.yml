@@ -10,6 +10,7 @@ on:
       - 'tests/task_validation_test.php'
       - 'tests/task_service_mysql_test.php'
       - 'database/migrations/009_task_management.sql'
+      - 'docs/18_Module_09_Task_Management.md'
       - '.github/workflows/task-tests.yml'
   pull_request:
     paths:
@@ -18,6 +19,7 @@ on:
       - 'tests/task_validation_test.php'
       - 'tests/task_service_mysql_test.php'
       - 'database/migrations/009_task_management.sql'
+      - 'docs/18_Module_09_Task_Management.md'
       - '.github/workflows/task-tests.yml'
   workflow_dispatch:
 
