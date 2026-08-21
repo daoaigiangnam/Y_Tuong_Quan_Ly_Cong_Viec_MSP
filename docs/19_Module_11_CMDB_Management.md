@@ -245,9 +245,11 @@ CMDB MySQL Integration
 | CMDB Service | ✅ |
 | CMDB Migration | ✅ |
 | CMDB Validation | ✅ |
-| MySQL Integration Test | 🔧 đang hoàn thiện CI fixture/schema |
-| CI Schema Isolation | ✅ đã sửa |
-| Test Customer Fixture | ✅ đã bổ sung |
+| MySQL Integration Test | ✅ |
+| CI Schema Isolation | ✅ |
+| Test Customer Fixture | ✅ |
 | Documentation | ✅ |
 
-**Module 11 chỉ được đánh dấu hoàn thành chính thức sau khi GitHub Actions chạy lại và toàn bộ CMDB tests GREEN.**
+**Module 11 — CMDB Management: HOÀN THÀNH.**
+
+Các test CMDB/MySQL/relationship/referential-integrity/foreign-key/CI-ownership đã được CI kiểm tra GREEN trên branch `feature/php-mysql-msp-platform`.
