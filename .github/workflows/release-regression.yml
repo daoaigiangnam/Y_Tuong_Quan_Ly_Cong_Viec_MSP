@@ -1,0 +1,148 @@
+name: Release Regression Gate
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/**'
+      - 'database/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/**'
+      - 'database/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  release-regression:
+    name: Full platform regression
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msp_itsm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql
+          coverage: none
+
+      - name: Wait for MySQL
+        run: |
+          set -e
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -uroot -proot && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: Install base schema
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
+
+      - name: Apply all migrations in order
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -e
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < "$f"
+          done
+
+      - name: Seed reference data
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/seed.sql
+
+      - name: PHP syntax gate
+        run: |
+          set -e
+          find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Validation regression suite
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+          MSP_TEST_DSN: mysql:host=127.0.0.1;port=3306;dbname=msp_itsm;charset=utf8mb4
+          MSP_TEST_DB_USER: root
+          MSP_TEST_DB_PASSWORD: root
+        run: |
+          set -e
+          for f in tests/*_validation_test.php; do
+            echo "========================================"
+            echo "Running $f"
+            php "$f"
+          done
+
+      - name: Platform end-to-end regression
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/platform_integration_test.php
+
+      - name: Platform rollback regression
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/platform_integration_cleanup_test.php
+
+      - name: Platform negative-path regression
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/platform_integration_negative_test.php
+
+      - name: Final release integrity gate
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/release_regression_test.php
+
+      - name: Release gate summary
+        run: |
+          echo "========================================"
+          echo "RELEASE REGRESSION GATE PASSED"
+          echo "Schema + migrations + reference data"
+          echo "PHP syntax + validation regression"
+          echo "Platform E2E + rollback + negative path"
+          echo "Cross-module FK + reference-data integrity"
+          echo "========================================"
