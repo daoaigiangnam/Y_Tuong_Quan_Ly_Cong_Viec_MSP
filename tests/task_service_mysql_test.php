@@ -67,6 +67,21 @@ try {
         throw new RuntimeException('Disabled assignment policy created an unexpected Task.');
     }
 
+    $invalidRejected = false;
+    try {
+        TaskService::create($db, [
+            'task_no' => 'TSK-INVALID-STATUS',
+            'title' => 'Invalid lifecycle task',
+            'status' => 'INVALID_STATUS',
+            'assignee_user_id' => $assigneeId,
+        ], $userId);
+    } catch (InvalidArgumentException $e) {
+        $invalidRejected = true;
+    }
+    if (!$invalidRejected) {
+        throw new RuntimeException('Task creation accepted an invalid initial lifecycle state.');
+    }
+
     TaskService::transition($db, $taskId, 'IN_PROGRESS', $assigneeId);
     TaskService::transition($db, $taskId, 'DONE', $assigneeId);
 
