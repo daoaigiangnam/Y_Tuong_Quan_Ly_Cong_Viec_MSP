@@ -16,9 +16,32 @@ $db = new PDO("mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4", 
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ]);
 
-$actorId = (int)$db->query("SELECT id FROM users WHERE is_active=1 ORDER BY id LIMIT 1")->fetchColumn();
+// The CI seed contains reference data but intentionally does not create users.
+// Make this negative-path test self-contained by creating a deterministic test actor.
+$actorUsername = 'ci_negative_actor';
+$actorRoleId = (int)$db->query("SELECT id FROM roles WHERE code='IT_SUPPORT' LIMIT 1")->fetchColumn();
+if ($actorRoleId <= 0) {
+    throw new RuntimeException('IT_SUPPORT role is not available for the negative-path test.');
+}
+
+$actorStmt = $db->prepare(
+    "INSERT INTO users (username, password_hash, full_name, email, role_id, is_active, created_at)
+     VALUES (:username, :password_hash, :full_name, :email, :role_id, 1, NOW())
+     ON DUPLICATE KEY UPDATE role_id=VALUES(role_id), is_active=1"
+);
+$actorStmt->execute([
+    'username' => $actorUsername,
+    'password_hash' => str_repeat('x', 60),
+    'full_name' => 'CI Negative Test Actor',
+    'email' => 'ci-negative-actor@example.invalid',
+    'role_id' => $actorRoleId,
+]);
+
+$actorStmt = $db->prepare('SELECT id FROM users WHERE username=:username AND is_active=1 LIMIT 1');
+$actorStmt->execute(['username' => $actorUsername]);
+$actorId = (int)$actorStmt->fetchColumn();
 if ($actorId <= 0) {
-    throw new RuntimeException('No active test actor is available.');
+    throw new RuntimeException('Unable to create an active test actor.');
 }
 
 $assertions = 0;
