@@ -1,0 +1,85 @@
+name: Platform Integration Tests
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+    paths:
+      - 'app/**'
+      - 'database/**'
+      - 'tests/platform_integration_test.php'
+      - '.github/workflows/platform-integration-tests.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'database/**'
+      - 'tests/platform_integration_test.php'
+      - '.github/workflows/platform-integration-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  platform-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msp_itsm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          php -l tests/platform_integration_test.php
+          php -l app/services/TaskService.php
+          php -l app/task_policy.php
+
+      - name: Install database schema
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
+
+      - name: Apply all platform migrations
+        env:
+          MYSQL_PWD: root
+        run: |
+          set -e
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < "$f"
+          done
+
+      - name: Seed reference data
+        env:
+          MYSQL_PWD: root
+        run: mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/seed.sql
+
+      - name: Platform end-to-end integration test
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/platform_integration_test.php
+
+      - name: Regression PHP lint
+        run: find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
