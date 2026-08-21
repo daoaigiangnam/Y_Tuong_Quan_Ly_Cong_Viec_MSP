@@ -8,12 +8,14 @@ on:
       - 'app/**'
       - 'database/**'
       - 'tests/platform_integration_test.php'
+      - 'tests/platform_integration_cleanup_test.php'
       - '.github/workflows/platform-integration-tests.yml'
   pull_request:
     paths:
       - 'app/**'
       - 'database/**'
       - 'tests/platform_integration_test.php'
+      - 'tests/platform_integration_cleanup_test.php'
       - '.github/workflows/platform-integration-tests.yml'
   workflow_dispatch:
 
@@ -49,6 +51,7 @@ jobs:
         run: |
           set -e
           php -l tests/platform_integration_test.php
+          php -l tests/platform_integration_cleanup_test.php
           php -l app/services/TaskService.php
           php -l app/task_policy.php
 
@@ -80,6 +83,15 @@ jobs:
           DB_USER: root
           DB_PASS: root
         run: php tests/platform_integration_test.php
+
+      - name: Platform rollback and cleanup test
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/platform_integration_cleanup_test.php
 
       - name: Regression PHP lint
         run: find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
