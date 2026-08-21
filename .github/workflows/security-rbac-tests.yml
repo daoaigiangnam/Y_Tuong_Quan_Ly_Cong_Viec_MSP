@@ -1,0 +1,31 @@
+name: Security RBAC Tests
+
+on:
+  push:
+    branches: [feature/php-mysql-msp-platform]
+    paths:
+      - 'app/**'
+      - 'tests/security_rbac_cross_module_test.php'
+      - '.github/workflows/security-rbac-tests.yml'
+  pull_request:
+    branches: [feature/php-mysql-msp-platform]
+    paths:
+      - 'app/**'
+      - 'tests/security_rbac_cross_module_test.php'
+      - '.github/workflows/security-rbac-tests.yml'
+
+jobs:
+  security-rbac:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: PHP syntax check
+        run: php -l tests/security_rbac_cross_module_test.php
+      - name: RBAC cross-module policy test
+        run: php tests/security_rbac_cross_module_test.php
+      - name: Regression PHP lint
+        run: |
+          find app tests -name '*.php' -print0 | xargs -0 -n1 php -l
