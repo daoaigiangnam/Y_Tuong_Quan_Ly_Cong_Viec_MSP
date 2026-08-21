@@ -8,6 +8,7 @@ on:
       - 'public/**'
       - 'tests/security_rbac_cross_module_test.php'
       - 'tests/security_route_guard_test.php'
+      - 'tests/security_input_hardening_test.php'
       - '.github/workflows/security-rbac-tests.yml'
   pull_request:
     branches: [feature/php-mysql-msp-platform]
@@ -16,6 +17,7 @@ on:
       - 'public/**'
       - 'tests/security_rbac_cross_module_test.php'
       - 'tests/security_route_guard_test.php'
+      - 'tests/security_input_hardening_test.php'
       - '.github/workflows/security-rbac-tests.yml'
 
 jobs:
@@ -30,10 +32,13 @@ jobs:
         run: |
           php -l tests/security_rbac_cross_module_test.php
           php -l tests/security_route_guard_test.php
+          php -l tests/security_input_hardening_test.php
       - name: RBAC cross-module policy test
         run: php tests/security_rbac_cross_module_test.php
       - name: Web route security guard test
         run: php tests/security_route_guard_test.php
+      - name: Input hardening regression test
+        run: php tests/security_input_hardening_test.php
       - name: Regression PHP lint
         run: |
           find app public tests -name '*.php' -print0 | xargs -0 -n1 php -l
