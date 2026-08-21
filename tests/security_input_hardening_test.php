@@ -52,8 +52,8 @@ security_input_assert(str_contains($field, 'name="_csrf"'), 'csrf_field() emits 
 security_input_assert(str_contains($field, 'value="' . e($token) . '"'), 'csrf_field() emits the session CSRF token through HTML escaping');
 
 $helperSource = (string)file_get_contents($helpersPath);
-security_input_assert(str_contains($helperSource, "htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8')"), 'Shared output helper uses htmlspecialchars with strict quote escaping');
-security_input_assert(str_contains($helperSource, "hash_equals($_SESSION['_csrf'] ?? '', $_POST['_csrf'] ?? '')"), 'CSRF verification uses constant-time hash_equals comparison');
-security_input_assert(str_contains($helperSource, "random_bytes(32)"), 'CSRF token generation uses cryptographically secure random_bytes');
+security_input_assert(str_contains($helperSource, 'htmlspecialchars((string)$value, ENT_QUOTES, \'UTF-8\')'), 'Shared output helper uses htmlspecialchars with strict quote escaping');
+security_input_assert(str_contains($helperSource, 'hash_equals($_SESSION[\'_csrf\'] ?? \'\', $_POST[\'_csrf\'] ?? \'\')'), 'CSRF verification uses constant-time hash_equals comparison');
+security_input_assert(str_contains($helperSource, 'random_bytes(32)'), 'CSRF token generation uses cryptographically secure random_bytes');
 
 fwrite(STDOUT, "Security input hardening checkpoint PASS\n");
