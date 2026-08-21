@@ -38,7 +38,7 @@ security_route_assert(
     'Shared role guard exists and returns HTTP 403 for unauthorized roles'
 );
 security_route_assert(
-    str_contains($auth, "u.is_active=1"),
+    str_contains($auth, 'u.is_active=1'),
     'Login query rejects inactive users'
 );
 
@@ -62,17 +62,17 @@ foreach ($protectedRoutes as $relativePath) {
 
 $customer = route_source($root . '/public/customer.php');
 security_route_assert(
-    str_contains($customer, "role_code") && str_contains($customer, "===\'CUSTOMER\'") && str_contains($customer, '403'),
+    str_contains($customer, 'role_code') && str_contains($customer, "==='CUSTOMER'") && str_contains($customer, '403'),
     'Customer master blocks customer-portal users from internal customer administration'
 );
 
 $tasks = route_source($root . '/public/tasks.php');
 security_route_assert(
-    str_contains($tasks, "require_login();") && str_contains($tasks, "\$allowedRoles=['ADMIN','IT_LEAD','IT_OWNER','IT_SUPPORT']"),
+    str_contains($tasks, 'require_login();') && str_contains($tasks, "\$allowedRoles=['ADMIN','IT_LEAD','IT_OWNER','IT_SUPPORT']"),
     'Task management is restricted to approved internal roles'
 );
 security_route_assert(
-    str_contains($tasks, 'verify_csrf();') && str_contains($tasks, "$_SERVER['REQUEST_METHOD']==='POST'"),
+    str_contains($tasks, 'verify_csrf();') && str_contains($tasks, "\$_SERVER['REQUEST_METHOD']==='POST'"),
     'Task state-changing requests require POST and CSRF validation'
 );
 security_route_assert(
