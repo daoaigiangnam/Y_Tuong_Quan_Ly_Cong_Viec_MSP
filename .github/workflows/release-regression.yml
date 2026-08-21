@@ -90,6 +90,9 @@ jobs:
       - name: Deployment hardening regression
         run: php tests/deployment_hardening_test.php
 
+      - name: UAT readiness acceptance gate
+        run: php tests/uat_readiness_test.php
+
       - name: Release traceability regression
         run: php tests/release_readiness_traceability_test.php
 
@@ -153,7 +156,7 @@ jobs:
           echo "RELEASE REGRESSION GATE PASSED"
           echo "Schema + migrations + reference data"
           echo "PHP syntax + validation regression"
-          echo "Deployment hardening + traceability"
+          echo "Deployment hardening + UAT readiness + traceability"
           echo "Platform E2E + rollback + negative path"
           echo "Cross-module FK + reference-data integrity"
           echo "========================================"
