@@ -1,0 +1,38 @@
+name: Release Readiness
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - 'feature/**'
+
+jobs:
+  traceability:
+    name: Release traceability
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP syntax check
+        run: php -l tests/release_readiness_traceability_test.php
+
+      - name: Release traceability gate
+        run: php tests/release_readiness_traceability_test.php
+
+      - name: Regression PHP lint
+        run: |
+          set -e
+          for file in tests/*.php; do
+            php -l "$file" >/dev/null
+          done
