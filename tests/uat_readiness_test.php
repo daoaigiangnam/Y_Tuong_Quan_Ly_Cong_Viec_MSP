@@ -42,6 +42,7 @@ $moduleDocs = [
     '12_Module_04_SLA_Policy_Engine.md',
     '13_Module_05_User_Roles_Permissions.md',
     '14_Module_06_Ticket_Request_Management.md',
+    '15_Module_07_Contract_Management.md',
     '16_Module_08_Problem_Management.md',
     '17_Module_09_Change_Management.md',
     '18_Module_10_Knowledge_Management.md',
