@@ -76,7 +76,8 @@ security_route_assert(
     'Task state-changing requests require POST and CSRF validation'
 );
 security_route_assert(
-    str_contains($tasks, "role_code==='IT_SUPPORT'") && str_contains($tasks, 't.assignee_user_id=?'),
+    (str_contains($tasks, "['role_code']==='IT_SUPPORT'") || str_contains($tasks, "\$u['role_code']==='IT_SUPPORT'"))
+        && str_contains($tasks, 't.assignee_user_id=?'),
     'IT Support task list is restricted to assigned tasks'
 );
 
