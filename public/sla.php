@@ -3,12 +3,21 @@
 declare(strict_types=1);
 
 /**
- * Module 04 — SLA Policy Management
- * Pure validation/demo endpoint for the current development stage.
+ * Module 04 — SLA Policy Management.
  *
- * This file intentionally has no database/bootstrap dependency so that
- * validation tests can run in GitHub Actions without external infrastructure.
+ * The route is protected by the shared application authentication guard.
+ * Validation remains lightweight so the standalone CLI validation test can
+ * execute without requiring a database connection.
  */
+
+require __DIR__ . '/../app/bootstrap.php';
+require_login();
+
+$u = current_user();
+if (($u['role_code'] ?? '') === 'CUSTOMER') {
+    http_response_code(403);
+    exit('Forbidden');
+}
 
 function validateSlaPolicy(array $data): array
 {
