@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
-/** Module 07 — Contract business rules independent from persistence/UI. */
+/**
+ * Module 07 — Contract business rules independent from persistence/UI.
+ *
+ * The procedural functions are kept as the canonical policy API. The
+ * ContractPolicy facade below provides the service-layer API used by
+ * ContractService while remaining backward-compatible with existing callers.
+ */
 
 function contract_allowed_types(): array
 {
@@ -11,7 +17,7 @@ function contract_allowed_types(): array
 
 function contract_allowed_transitions(string $status): array
 {
-    return match ($status) {
+    return match (strtoupper($status)) {
         'DRAFT' => ['PENDING_SIGN', 'CANCELLED'],
         'PENDING_SIGN' => ['ACTIVE', 'CANCELLED'],
         'ACTIVE' => ['EXPIRING', 'EXPIRED', 'RENEWED', 'CANCELLED'],
@@ -25,7 +31,35 @@ function contract_allowed_transitions(string $status): array
 
 function contract_transition_allowed(string $from, string $to): bool
 {
-    return in_array(strtoupper($to), contract_allowed_transitions(strtoupper($from)), true);
+    return in_array(
+        strtoupper($to),
+        contract_allowed_transitions(strtoupper($from)),
+        true
+    );
+}
+
+/**
+ * Service-layer policy facade.
+ *
+ * Throws InvalidArgumentException when a lifecycle transition is not allowed.
+ */
+final class ContractPolicy
+{
+    public static function assertTransition(string $from, string $to): void
+    {
+        $from = strtoupper(trim($from));
+        $to = strtoupper(trim($to));
+
+        if ($from === '' || $to === '') {
+            throw new InvalidArgumentException('Contract status transition requires both source and target status.');
+        }
+
+        if (!contract_transition_allowed($from, $to)) {
+            throw new InvalidArgumentException(
+                sprintf('Invalid contract status transition: %s -> %s.', $from, $to)
+            );
+        }
+    }
 }
 
 function validate_contract_payload(array $data): array
@@ -42,8 +76,10 @@ function validate_contract_payload(array $data): array
     if (!in_array($type, contract_allowed_types(), true)) {
         $errors['contract_type'] = 'Unsupported contract type.';
     }
+
     $startDate = DateTimeImmutable::createFromFormat('Y-m-d', $start);
     $endDate = DateTimeImmutable::createFromFormat('Y-m-d', $end);
+
     if (!$startDate || $startDate->format('Y-m-d') !== $start) {
         $errors['start_date'] = 'Invalid start date.';
     }
@@ -62,10 +98,12 @@ function contract_alert_date(string $endDate, int $daysBefore): string
     if ($daysBefore < 0) {
         throw new InvalidArgumentException('days_before must be non-negative.');
     }
+
     $date = DateTimeImmutable::createFromFormat('Y-m-d', $endDate);
     if (!$date || $date->format('Y-m-d') !== $endDate) {
         throw new InvalidArgumentException('Invalid contract end date.');
     }
+
     return $date->modify('-' . $daysBefore . ' days')->format('Y-m-d');
 }
 
