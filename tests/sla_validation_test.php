@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../public/sla.php';
+require_once __DIR__ . '/../app/sla_policy.php';
 
 function assertSameValue(mixed $expected, mixed $actual, string $message): void
 {
