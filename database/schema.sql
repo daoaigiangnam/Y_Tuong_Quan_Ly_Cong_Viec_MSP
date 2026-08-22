@@ -1,17 +1,214 @@
 CREATE DATABASE IF NOT EXISTS msp_itsm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE msp_itsm;
 
-CREATE TABLE roles (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, code VARCHAR(40) NOT NULL UNIQUE, name VARCHAR(100) NOT NULL) ENGINE=InnoDB;
-CREATE TABLE users (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, username VARCHAR(80) NOT NULL UNIQUE, password_hash VARCHAR(255) NOT NULL, full_name VARCHAR(150) NOT NULL, email VARCHAR(190) NULL, role_id INT UNSIGNED NOT NULL, is_active TINYINT(1) NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, FOREIGN KEY(role_id) REFERENCES roles(id)) ENGINE=InnoDB;
-CREATE TABLE customers (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, code VARCHAR(40) NOT NULL UNIQUE, name VARCHAR(190) NOT NULL, email VARCHAR(190) NULL, phone VARCHAR(50) NULL, address VARCHAR(255) NULL, status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE', created_at DATETIME NOT NULL) ENGINE=InnoDB;
-CREATE TABLE customer_contacts (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, customer_id INT UNSIGNED NOT NULL, full_name VARCHAR(150) NOT NULL, email VARCHAR(190) NOT NULL, phone VARCHAR(50) NULL, is_primary TINYINT(1) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, FOREIGN KEY(customer_id) REFERENCES customers(id)) ENGINE=InnoDB;
-CREATE TABLE services (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(150) NOT NULL, description TEXT NULL, is_active TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB;
-CREATE TABLE contracts (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, contract_no VARCHAR(80) NOT NULL UNIQUE, customer_id INT UNSIGNED NOT NULL, contract_type ENUM('FULL_PACKAGE','PAY_PER_INCIDENT') NOT NULL, start_date DATE NOT NULL, end_date DATE NOT NULL, value DECIMAL(18,2) NULL, status ENUM('DRAFT','PENDING_SIGN','ACTIVE','EXPIRING','EXPIRED','RENEWED','CANCELLED') NOT NULL DEFAULT 'DRAFT', owner_user_id INT UNSIGNED NULL, lead_user_id INT UNSIGNED NULL, sales_user_id INT UNSIGNED NULL, public_notes TEXT NULL, internal_notes TEXT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id), FOREIGN KEY(owner_user_id) REFERENCES users(id), FOREIGN KEY(lead_user_id) REFERENCES users(id), FOREIGN KEY(sales_user_id) REFERENCES users(id), INDEX idx_contract_end(end_date), INDEX idx_contract_customer(customer_id)) ENGINE=InnoDB;
-CREATE TABLE contract_services (contract_id INT UNSIGNED NOT NULL, service_id INT UNSIGNED NOT NULL, PRIMARY KEY(contract_id,service_id), FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE, FOREIGN KEY(service_id) REFERENCES services(id)) ENGINE=InnoDB;
-CREATE TABLE contract_alert_rules (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, contract_id INT UNSIGNED NOT NULL, alert_no TINYINT UNSIGNED NOT NULL, days_before INT NOT NULL, is_active TINYINT(1) NOT NULL DEFAULT 1, UNIQUE KEY uq_contract_alert(contract_id,alert_no), FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE) ENGINE=InnoDB;
-CREATE TABLE contract_alerts (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, contract_id INT UNSIGNED NOT NULL, alert_no TINYINT UNSIGNED NOT NULL, scheduled_date DATE NOT NULL, sent_at DATETIME NULL, attempted_at DATETIME NULL, status ENUM('PENDING','SENT','FAILED') NOT NULL DEFAULT 'PENDING', recipient TEXT NULL, cc TEXT NULL, error_message TEXT NULL, email_log_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL, UNIQUE KEY uq_alert_instance(contract_id,alert_no), INDEX idx_contract_alert_due(contract_id,status,scheduled_date), INDEX idx_contract_alert_attempted(attempted_at), FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE) ENGINE=InnoDB;
-CREATE TABLE tickets (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ticket_no VARCHAR(80) NOT NULL UNIQUE, customer_id INT UNSIGNED NOT NULL, contract_id INT UNSIGNED NULL, service_id INT UNSIGNED NULL, subject VARCHAR(255) NOT NULL, description TEXT NOT NULL, priority ENUM('P1','P2','P3','P4') NOT NULL DEFAULT 'P3', status ENUM('NEW','ASSIGNED','IN_PROGRESS','WAITING_CUSTOMER','RESOLVED','CLOSED','REOPENED') NOT NULL DEFAULT 'NEW', owner_user_id INT UNSIGNED NULL, assigned_user_id INT UNSIGNED NULL, created_by_user_id INT UNSIGNED NOT NULL, reopen_count INT UNSIGNED NOT NULL DEFAULT 0, due_at DATETIME NULL, resolved_at DATETIME NULL, closed_at DATETIME NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, FOREIGN KEY(customer_id) REFERENCES customers(id), FOREIGN KEY(contract_id) REFERENCES contracts(id), FOREIGN KEY(service_id) REFERENCES services(id), FOREIGN KEY(owner_user_id) REFERENCES users(id), FOREIGN KEY(assigned_user_id) REFERENCES users(id), FOREIGN KEY(created_by_user_id) REFERENCES users(id), INDEX idx_ticket_status(status), INDEX idx_ticket_owner(owner_user_id), INDEX idx_ticket_assigned(assigned_user_id), INDEX idx_ticket_customer(customer_id)) ENGINE=InnoDB;
-CREATE TABLE ticket_comments (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ticket_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NOT NULL, body TEXT NOT NULL, is_internal TINYINT(1) NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE, FOREIGN KEY(user_id) REFERENCES users(id)) ENGINE=InnoDB;
-CREATE TABLE ticket_history (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ticket_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NOT NULL, event VARCHAR(60) NOT NULL, value VARCHAR(255) NULL, note TEXT NULL, created_at DATETIME NOT NULL, FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE, INDEX idx_history_ticket(ticket_id,created_at)) ENGINE=InnoDB;
-CREATE TABLE audit_logs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT UNSIGNED NULL, action VARCHAR(80) NOT NULL, entity VARCHAR(80) NOT NULL, entity_id INT UNSIGNED NOT NULL, meta JSON NULL, created_at DATETIME NOT NULL, INDEX idx_audit_entity(entity,entity_id), INDEX idx_audit_created(created_at)) ENGINE=InnoDB;
-CREATE TABLE email_logs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_type VARCHAR(60) NOT NULL, entity VARCHAR(80) NULL, entity_id INT UNSIGNED NULL, recipient TEXT NOT NULL, subject VARCHAR(255) NOT NULL, status ENUM('SENT','FAILED') NOT NULL, error_message TEXT NULL, created_at DATETIME NOT NULL) ENGINE=InnoDB;
+CREATE TABLE roles (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE users (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(80) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(190) NULL,
+    role_id INT UNSIGNED NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY(role_id) REFERENCES roles(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE customers (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(40) NOT NULL UNIQUE,
+    name VARCHAR(190) NOT NULL,
+    email VARCHAR(190) NULL,
+    phone VARCHAR(50) NULL,
+    address VARCHAR(255) NULL,
+    status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE customer_contacts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT UNSIGNED NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(190) NOT NULL,
+    phone VARCHAR(50) NULL,
+    is_primary TINYINT(1) NOT NULL DEFAULT 0,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    FOREIGN KEY(customer_id) REFERENCES customers(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE services (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(150) NOT NULL,
+    description TEXT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB;
+
+CREATE TABLE contracts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    contract_no VARCHAR(80) NOT NULL UNIQUE,
+    customer_id INT UNSIGNED NOT NULL,
+    contract_type ENUM('FULL_PACKAGE','PAY_PER_INCIDENT') NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    value DECIMAL(18,2) NULL,
+    status ENUM('DRAFT','PENDING_SIGN','ACTIVE','EXPIRING','EXPIRED','RENEWED','CANCELLED') NOT NULL DEFAULT 'DRAFT',
+    owner_user_id INT UNSIGNED NULL,
+    lead_user_id INT UNSIGNED NULL,
+    sales_user_id INT UNSIGNED NULL,
+    public_notes TEXT NULL,
+    internal_notes TEXT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY(customer_id) REFERENCES customers(id),
+    FOREIGN KEY(owner_user_id) REFERENCES users(id),
+    FOREIGN KEY(lead_user_id) REFERENCES users(id),
+    FOREIGN KEY(sales_user_id) REFERENCES users(id),
+    INDEX idx_contract_end(end_date),
+    INDEX idx_contract_customer(customer_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_services (
+    contract_id INT UNSIGNED NOT NULL,
+    service_id INT UNSIGNED NOT NULL,
+    PRIMARY KEY(contract_id,service_id),
+    FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+    FOREIGN KEY(service_id) REFERENCES services(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_alert_rules (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    contract_id INT UNSIGNED NOT NULL,
+    alert_no TINYINT UNSIGNED NOT NULL,
+    days_before INT NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    UNIQUE KEY uq_contract_alert(contract_id,alert_no),
+    FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE contract_alerts (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    contract_id INT UNSIGNED NOT NULL,
+    alert_no TINYINT UNSIGNED NOT NULL,
+    scheduled_date DATE NOT NULL,
+    sent_at DATETIME NULL,
+    attempted_at DATETIME NULL,
+    status ENUM('PENDING','SENT','FAILED') NOT NULL DEFAULT 'PENDING',
+    recipient TEXT NULL,
+    cc TEXT NULL,
+    error_message TEXT NULL,
+    email_log_id BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uq_alert_instance(contract_id,alert_no),
+    INDEX idx_contract_alert_due(contract_id,status,scheduled_date),
+    INDEX idx_contract_alert_attempted(attempted_at),
+    FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE tickets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_no VARCHAR(80) NOT NULL UNIQUE,
+    customer_id INT UNSIGNED NOT NULL,
+    contract_id INT UNSIGNED NULL,
+    service_id INT UNSIGNED NULL,
+    request_type VARCHAR(50) NULL,
+    subject VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    priority ENUM('P1','P2','P3','P4') NOT NULL DEFAULT 'P3',
+    status ENUM(
+        'NEW',
+        'TRIAGED',
+        'ASSIGNED',
+        'IN_PROGRESS',
+        'WAITING_CUSTOMER',
+        'PENDING_CUSTOMER',
+        'PENDING_VENDOR',
+        'PENDING_INTERNAL',
+        'RESOLVED',
+        'REOPENED',
+        'CLOSED'
+    ) NOT NULL DEFAULT 'NEW',
+    owner_user_id INT UNSIGNED NULL,
+    assigned_user_id INT UNSIGNED NULL,
+    created_by_user_id INT UNSIGNED NOT NULL,
+    requester_user_id INT UNSIGNED NULL,
+    reopen_count INT UNSIGNED NOT NULL DEFAULT 0,
+    due_at DATETIME NULL,
+    first_response_at DATETIME NULL,
+    sla_policy_snapshot JSON NULL,
+    sla_target_response_at DATETIME NULL,
+    sla_target_resolve_at DATETIME NULL,
+    resolved_at DATETIME NULL,
+    closed_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY(customer_id) REFERENCES customers(id),
+    FOREIGN KEY(contract_id) REFERENCES contracts(id),
+    FOREIGN KEY(service_id) REFERENCES services(id),
+    FOREIGN KEY(owner_user_id) REFERENCES users(id),
+    FOREIGN KEY(assigned_user_id) REFERENCES users(id),
+    FOREIGN KEY(created_by_user_id) REFERENCES users(id),
+    FOREIGN KEY(requester_user_id) REFERENCES users(id),
+    INDEX idx_ticket_status(status),
+    INDEX idx_ticket_owner(owner_user_id),
+    INDEX idx_ticket_assigned(assigned_user_id),
+    INDEX idx_ticket_customer(customer_id),
+    INDEX idx_ticket_requester(requester_user_id),
+    INDEX idx_ticket_sla_resolve(sla_target_resolve_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE ticket_comments (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    body TEXT NOT NULL,
+    visibility ENUM('CUSTOMER_VISIBLE','INTERNAL_ONLY') NOT NULL DEFAULT 'CUSTOMER_VISIBLE',
+    is_internal TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    INDEX idx_ticket_comments_visibility(ticket_id,visibility,created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE ticket_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    ticket_id INT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    event VARCHAR(60) NOT NULL,
+    value VARCHAR(255) NULL,
+    note TEXT NULL,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY(ticket_id) REFERENCES tickets(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    INDEX idx_history_ticket(ticket_id,created_at),
+    INDEX idx_history_event(ticket_id,event,created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NULL,
+    action VARCHAR(80) NOT NULL,
+    entity VARCHAR(80) NOT NULL,
+    entity_id INT UNSIGNED NOT NULL,
+    meta JSON NULL,
+    created_at DATETIME NOT NULL,
+    INDEX idx_audit_entity(entity,entity_id),
+    INDEX idx_audit_created(created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE email_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    event_type VARCHAR(60) NOT NULL,
+    entity VARCHAR(80) NULL,
+    entity_id INT UNSIGNED NULL,
+    recipient TEXT NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    status ENUM('SENT','FAILED') NOT NULL,
+    error_message TEXT NULL,
+    created_at DATETIME NOT NULL
+) ENGINE=InnoDB;
