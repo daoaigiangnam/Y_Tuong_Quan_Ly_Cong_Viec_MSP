@@ -154,6 +154,36 @@ Analysis → Code → PHP Lint → Functional Test → GitHub Actions PASS → C
 
 Không chuyển module tiếp theo nếu module hiện tại chưa PASS.
 
+## Delivery / Release Gates
+
+Các module và lớp kiểm soát đã được đưa vào CI theo từng gate:
+
+```text
+Module 01–11
+   ↓
+PHP Lint + Module Tests
+   ↓
+Security / RBAC
+   ↓
+Platform Integration E2E
+   ↓
+Rollback + Negative-path Validation
+   ↓
+Release Regression
+   ↓
+UAT Readiness + Sign-off
+   ↓
+Production Go-Live Readiness
+   ↓
+Backup / Restore / DR
+```
+
+Production readiness không đồng nghĩa hệ thống đã được triển khai production. Trước go-live thực tế vẫn phải có backup/restore evidence, RPO/RTO, release approval, monitoring và rollback evidence.
+
+Runbook: [24 — Production Go-Live Readiness](docs/24_Production_GoLive_Readiness.md)
+
+DR: [25 — Backup / Restore / DR Runbook](docs/25_Backup_Restore_DR_Runbook.md)
+
 ## Lộ trình tiếp theo
 
 1. Hoàn thiện Service Portal shell + Customer Portal shell trên Shared Design System.
