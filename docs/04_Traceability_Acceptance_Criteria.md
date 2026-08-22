@@ -81,3 +81,31 @@ Given contract is renewed, then old contract remains immutable/history-safe and 
 - Email worker restart does not lose Pending alerts.
 - Bitrix24 outage does not block ticket resolution.
 - All failed integrations can be retried.
+
+## 7. UAT Evidence Requirements
+
+Every UAT acceptance item must have evidence that can be reviewed by the business owner and technical reviewer. Acceptable evidence includes:
+
+- Screenshot or screen recording of the completed user flow.
+- Ticket, Contract or Task identifier used during the test.
+- Before/after status showing the expected lifecycle transition.
+- Notification/email evidence where notification behavior is part of the acceptance criterion.
+- Audit/log evidence showing actor, timestamp and resulting business event.
+- API response or database verification when backend behavior cannot be proven from the UI alone.
+- Test result, expected outcome, actual outcome and PASS/FAIL disposition.
+
+Minimum UAT evidence record:
+
+| Field | Required content |
+|---|---|
+| Test ID | Acceptance criterion identifier |
+| Scenario | Business scenario executed |
+| Expected | Expected outcome |
+| Actual | Observed outcome |
+| Evidence | Screenshot, recording, ID, log, API or audit reference |
+| Tester | Person executing UAT |
+| Date/Time | Execution timestamp |
+| Result | PASS / FAIL |
+| Sign-off | Business owner approval where required |
+
+Evidence must be traceable to the acceptance criterion and retained with the UAT sign-off record. The evidence requirement does not replace technical automated tests; it complements them for business acceptance.
