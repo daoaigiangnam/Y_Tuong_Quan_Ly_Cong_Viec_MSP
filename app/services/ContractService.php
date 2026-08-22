@@ -17,10 +17,12 @@ final class ContractService
     {
         if (!$db->inTransaction()) {
             $db->beginTransaction();
+
             return [true, null];
         }
 
         $savepoint = 'contract_sp_' . (++self::$savepointSequence);
+
         $db->exec('SAVEPOINT ' . $savepoint);
 
         return [false, $savepoint];
@@ -33,6 +35,7 @@ final class ContractService
     ): void {
         if ($ownsTransaction) {
             $db->commit();
+
             return;
         }
 
@@ -50,6 +53,7 @@ final class ContractService
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
+
             return;
         }
 
@@ -66,6 +70,26 @@ final class ContractService
         if ($number === '') {
             $number = 'CTR-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
         }
+
+        /*
+         * Default contract alert rules.
+         *
+         * If alert_days is not supplied by the caller, create the standard
+         * 90 / 60 / 30 day alert rules required by the contract policy.
+         *
+         * Custom alert_days can still be supplied, for example:
+         *
+         * [
+         *     1 => 120,
+         *     2 => 60,
+         *     3 => 30
+         * ]
+         */
+        $alertDays = $data['alert_days'] ?? [
+            1 => 90,
+            2 => 60,
+            3 => 30,
+        ];
 
         [$ownsTransaction, $savepoint] = self::beginUnit($db);
 
@@ -108,7 +132,15 @@ final class ContractService
 
             $id = (int)$db->lastInsertId();
 
-            if (!empty($data['alert_days'])) {
+            /*
+             * Create contract alert rules.
+             *
+             * Default:
+             *   Alert 1 = 90 days before expiry
+             *   Alert 2 = 60 days before expiry
+             *   Alert 3 = 30 days before expiry
+             */
+            if (!empty($alertDays)) {
                 $ruleStmt = $db->prepare(
                     'INSERT INTO contract_alert_rules(
                         contract_id,
@@ -117,8 +149,12 @@ final class ContractService
                     ) VALUES(?,?,?)'
                 );
 
-                foreach ($data['alert_days'] as $alertNo => $daysBefore) {
-                    $ruleStmt->execute([$id, $alertNo, $daysBefore]);
+                foreach ($alertDays as $alertNo => $daysBefore) {
+                    $ruleStmt->execute([
+                        $id,
+                        (int)$alertNo,
+                        (int)$daysBefore
+                    ]);
                 }
             }
 
@@ -127,6 +163,7 @@ final class ContractService
             return $id;
         } catch (Throwable $e) {
             self::rollbackUnit($db, $ownsTransaction, $savepoint);
+
             throw $e;
         }
     }
@@ -167,6 +204,7 @@ final class ContractService
             self::commitUnit($db, $ownsTransaction, $savepoint);
         } catch (Throwable $e) {
             self::rollbackUnit($db, $ownsTransaction, $savepoint);
+
             throw $e;
         }
     }
