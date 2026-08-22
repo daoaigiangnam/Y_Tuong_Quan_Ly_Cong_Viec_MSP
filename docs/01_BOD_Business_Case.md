@@ -174,3 +174,17 @@ Hệ thống tạo ra 4 lớp kiểm soát:
 2. **Operational Control** — IT Owner/Support/Lead biết việc và trách nhiệm.
 3. **Commercial Control** — Sales và quản lý không quên gia hạn.
 4. **Data Control** — lịch sử, SLA, notification và audit trở thành dữ liệu có thể đo lường.
+
+## 11. Business Owner & Approval Boundary
+
+### Business Owner
+
+The **Business Owner** is the executive/business representative accountable for confirming that the MSP operating model, customer experience, service controls and commercial objectives are correctly represented in this solution.
+
+### Approval Boundary
+
+The Business Owner has final **approval** authority for business acceptance and UAT readiness before production go-live. Technical implementation, security controls and deployment readiness remain subject to the corresponding technical/security owners.
+
+### UAT Sign-off
+
+A UAT cycle is considered business-accepted only when the required acceptance criteria have recorded evidence and the Business Owner has provided the required sign-off. Any failed critical acceptance criterion blocks production approval until the issue is resolved or formally waived by the authorized Business Owner.
