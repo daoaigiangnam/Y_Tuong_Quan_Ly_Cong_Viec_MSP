@@ -22,7 +22,6 @@ final class ContractService
         }
 
         $savepoint = 'contract_sp_' . (++self::$savepointSequence);
-
         $db->exec('SAVEPOINT ' . $savepoint);
 
         return [false, $savepoint];
@@ -73,23 +72,27 @@ final class ContractService
 
         /*
          * Default contract alert rules.
-         *
-         * If alert_days is not supplied by the caller, create the standard
-         * 90 / 60 / 30 day alert rules required by the contract policy.
-         *
-         * Custom alert_days can still be supplied, for example:
-         *
-         * [
-         *     1 => 120,
-         *     2 => 60,
-         *     3 => 30
-         * ]
+         * If alert_days is not supplied, create the standard 90 / 60 / 30 rules.
          */
         $alertDays = $data['alert_days'] ?? [
             1 => 90,
             2 => 60,
             3 => 30,
         ];
+
+        /*
+         * Normalize contracted service IDs before opening the unit of work.
+         * This keeps the service relationship deterministic and prevents
+         * duplicate rows from violating the composite primary key.
+         */
+        $serviceIds = [];
+        foreach ((array)($data['service_ids'] ?? []) as $serviceId) {
+            $serviceId = (int)$serviceId;
+            if ($serviceId > 0) {
+                $serviceIds[$serviceId] = $serviceId;
+            }
+        }
+        $serviceIds = array_values($serviceIds);
 
         [$ownsTransaction, $savepoint] = self::beginUnit($db);
 
@@ -132,14 +135,18 @@ final class ContractService
 
             $id = (int)$db->lastInsertId();
 
-            /*
-             * Create contract alert rules.
-             *
-             * Default:
-             *   Alert 1 = 90 days before expiry
-             *   Alert 2 = 60 days before expiry
-             *   Alert 3 = 30 days before expiry
-             */
+            /* Create the contract-to-service relationships. */
+            if ($serviceIds !== []) {
+                $serviceStmt = $db->prepare(
+                    'INSERT INTO contract_services(contract_id, service_id) VALUES(?,?)'
+                );
+
+                foreach ($serviceIds as $serviceId) {
+                    $serviceStmt->execute([$id, $serviceId]);
+                }
+            }
+
+            /* Create contract alert rules. */
             if (!empty($alertDays)) {
                 $ruleStmt = $db->prepare(
                     'INSERT INTO contract_alert_rules(
