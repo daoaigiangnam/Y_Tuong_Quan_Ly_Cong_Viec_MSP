@@ -1,0 +1,38 @@
+name: Production Readiness
+
+on:
+  push:
+    branches:
+      - feature/php-mysql-msp-platform
+  pull_request:
+    branches:
+      - feature/php-mysql-msp-platform
+
+jobs:
+  production-readiness:
+    name: Production Go-Live Readiness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          php -l tests/production_go_live_readiness_test.php
+
+      - name: Production readiness test
+        run: php tests/production_go_live_readiness_test.php
+
+      - name: Required artifact check
+        run: |
+          set -e
+          test -f docs/24_Production_GoLive_Readiness.md
+          test -f docs/25_Backup_Restore_DR_Runbook.md
+          test -f tests/production_go_live_readiness_test.php
