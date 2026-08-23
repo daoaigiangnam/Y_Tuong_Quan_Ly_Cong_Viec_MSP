@@ -68,6 +68,10 @@ function login_user(PDO $db, string $username, string $password): bool
     }
 
     $u['permissions'] = load_user_permissions($db, (int)$u['role_id']);
+    $u['portal_type'] = strtoupper((string)($u['portal_type'] ?? 'SERVICE'));
+    $u['scope_type'] = strtoupper((string)($u['scope_type'] ?? 'GLOBAL'));
+    $u['customer_id'] = $u['customer_id'] !== null ? (int)$u['customer_id'] : null;
+    $u['service_id'] = $u['service_id'] !== null ? (int)$u['service_id'] : null;
     unset($u['password_hash']);
 
     session_regenerate_id(true);
