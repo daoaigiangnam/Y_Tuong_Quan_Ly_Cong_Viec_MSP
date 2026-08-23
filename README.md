@@ -1,66 +1,170 @@
 # Customer ITSM / MSP Management Platform
 
-> Nền tảng Customer ITSM/MSP bằng **PHP thuần + MySQL + Bootstrap**, thiết kế theo tài liệu nghiệp vụ BOD/Dev trong repo.
+> Nền tảng Customer ITSM/MSP bằng **PHP thuần + MySQL + Bootstrap**, phát triển từ nghiệp vụ gốc và các tài liệu kiến trúc trong repository.
 
-## Mục tiêu
+## Source of truth
 
-Hệ thống quản lý xuyên suốt: Customer → Contract → Service → Ticket → SLA → Service Owner → Service Agent → Customer Confirmation/Reopen → Escalation.
+`feature/php-mysql-msp-platform` là **implementation branch của nghiệp vụ mới nhất**.
 
-## Kiến trúc Portal đã chốt
+`main` giữ nghiệp vụ gốc, ý tưởng và tài liệu kiến trúc; không được xem là source code implementation để đồng bộ ngược vào feature branch.
 
-Sản phẩm có **một Shared Design System nhưng hai experience**:
+## Mục tiêu nghiệp vụ
 
-- **Service Portal**: portal dùng chung cho toàn bộ team Công ty Dịch vụ có quyền vận hành dịch vụ — IT Owner, IT Support, IT Lead và các team/role khác như Network, Security, Application, Onsite, Sales, Contract Admin... tùy phân quyền.
+Nền tảng quản lý xuyên suốt:
+
+```text
+Customer
+  ↓
+Contact
+  ↓
+Contract
+  ↓
+Service / SLA
+  ↓
+Ticket
+  ├── Task
+  ├── Problem
+  │     └── Change
+  └── Knowledge
+
+CMDB / CI ───────────────┘
+Audit / Email / History xuyên suốt
+```
+
+## Portal Architecture
+
+Một Shared Design System với hai experience:
+
+- **Service Portal**: IT Owner, IT Support, IT Lead và các team vận hành khác theo RBAC/scope.
 - **Customer Portal**: giao diện riêng cho khách hàng.
-- Hai portal dùng chung Ticket domain/service và cùng một MySQL source of truth.
-- UI component, status, timeline, table, form và visual language thống nhất; navigation, field visibility, action và dashboard thay đổi theo role/scope.
-- Bitrix24 REST **để mở cho giai đoạn sau**, không phải dependency của core product.
+- Hai portal dùng chung Ticket domain và cùng một MySQL source of truth.
+- Navigation, field visibility, action và dashboard thay đổi theo role/scope.
+- Bitrix24 REST là integration option cho giai đoạn sau, không phải dependency của core product.
 
-Chi tiết: [06 — Portal Architecture: Shared UI/UX](docs/06_Portal_Architecture_Shared_UIUX.md)
+## Implementation hiện tại
 
-## Tài liệu nghiệp vụ
-
-- [01 — BOD / Business Case](docs/01_BOD_Business_Case.md)
-- [02 — Dev / Product / UIUX Specification](docs/02_DEV_UIUX_Specification.md)
-- [03 — Data Model & Technical Blueprint](docs/03_Data_Model_Technical_Blueprint.md)
-- [04 — Traceability & Acceptance Criteria](docs/04_Traceability_Acceptance_Criteria.md)
-- [05 — Open Questions & Implementation Phases](docs/05_Open_Questions_Phases.md)
-- [06 — Portal Architecture: Shared UI/UX](docs/06_Portal_Architecture_Shared_UIUX.md)
-
-## Code hiện tại
-
-### Stack
-
-- PHP 8.3+ (plain PHP, no Laravel/framework)
-- MySQL 5.7+ / MariaDB tương thích
-- PDO + prepared statements
-- Bootstrap 5.3
-- Bootstrap Icons
-- JavaScript tối thiểu, server-rendered UI
-- Cron cho Contract Alert
-
-### Chức năng đã có trong skeleton chạy được
+### Core platform
 
 - Login/logout, session, password hashing
+- CSRF protection
+- PDO + prepared statements
 - RBAC nền tảng
-- Customer Portal dashboard cơ bản
-- Ticket create/list/detail
-- Ticket assignment
-- Ticket timeline/history
-- Public/internal comments
-- Ticket state transition
-- Customer Confirm / Reopen
-- Reopen counter + email alert
-- Contract list/detail
-- Contract Alert Rule #1/#2/#3
-- Contract Alert History
-- Cron worker cho cảnh báo hết hạn
 - Audit log
 - Email log
-- CSRF protection
-- PDO prepared statements
+- Customer và Customer Contacts
 
-## Cấu trúc
+### Contract
+
+- Contract CRUD service
+- Contract lifecycle
+- Contract → Service relationship
+- Contract alert rules 90/60/30 mặc định
+- Contract alert execution/history
+- Contract UI database-backed
+
+Contract type là:
+
+```text
+FULL_PACKAGE
+PAY_PER_INCIDENT
+```
+
+### Ticket / SLA
+
+- Ticket create/list/detail
+- Assignment
+- Request type
+- Requester
+- Ticket lifecycle
+- First response timestamp
+- SLA snapshot / target response / target resolve
+- Customer-visible vs internal comments
+- Timeline/history
+- Customer Confirm / Reopen
+- Reopen counter
+- Email alert
+
+Ticket lifecycle hỗ trợ:
+
+```text
+NEW → TRIAGED → ASSIGNED → IN_PROGRESS
+                         ↓
+        PENDING_CUSTOMER / PENDING_VENDOR / PENDING_INTERNAL
+                         ↓
+                      RESOLVED
+                         ↓
+                       CLOSED
+
+RESOLVED/CLOSED → REOPENED
+```
+
+### Problem
+
+- Problem creation
+- Lifecycle policy
+- Ticket linking
+- Analysis
+- Documents
+- History
+
+### Change
+
+- Change creation
+- Lifecycle
+- Approval
+- Implementation plan
+- Rollback plan
+- Test plan
+- Success criteria
+- Ticket / Problem linking
+- History
+
+### Knowledge
+
+- Article creation
+- Draft / review / publish lifecycle
+- Versioning
+- Content update
+- Visibility
+- Ticket / Problem / Change linking
+- History
+
+### CMDB
+
+- CI creation
+- CI lifecycle
+- CI relationships
+- CI audit
+- Customer/service association
+- Criticality/environment metadata
+
+### Task
+
+- Task creation
+- Assignment
+- Lifecycle
+- Ticket linkage
+- History
+
+## Stack
+
+- PHP 8.3+ — plain PHP, no Laravel/framework
+- MySQL 5.7+ / MariaDB compatible
+- PDO + prepared statements
+- Bootstrap 5.3
+- Server-rendered UI
+- JavaScript tối thiểu
+- Cron cho Contract Alert
+
+## Database
+
+`database/schema.sql` là schema baseline của implementation branch.
+
+Migrations được áp dụng theo thứ tự trong `database/migrations/` để nâng cấp database hiện hữu.
+
+Các nhóm migration hiện có gồm Customer/User, Ticket hardening, Contract Alert, Problem, Change, Knowledge, CMDB và Task.
+
+## Cấu trúc chính
 
 ```text
 app/
@@ -69,21 +173,25 @@ app/
   config.php
   db.php
   helpers.php
+  *_policy.php
   services/
-    TicketService.php
-    ContractAlertService.php
+
 public/
   index.php
-  assets/app.css
+  contract.php
+  ...
+
 cron/
   contract_alerts.php
+
 database/
   schema.sql
   seed.sql
-  migrations/002_customer_user.sql
-install.php
-storage/uploads/
+  migrations/
+
 docs/
+tests/
+storage/
 ```
 
 ## Cài đặt
@@ -94,19 +202,18 @@ docs/
 - PDO MySQL
 - MySQL 5.7+ hoặc MariaDB
 - Apache/Nginx
-- PHP CLI để chạy cron
+- PHP CLI
 
 ### 2. Database
 
 ```bash
 mysql -u root -p < database/schema.sql
 mysql -u root -p msp_itsm < database/seed.sql
-mysql -u root -p msp_itsm < database/migrations/002_customer_user.sql
 ```
 
-### 3. Cấu hình
+Nếu nâng cấp database hiện hữu, chạy các migration còn thiếu theo thứ tự.
 
-Có thể dùng environment variables:
+### 3. Environment
 
 ```text
 MSP_DB_HOST=127.0.0.1
@@ -118,83 +225,98 @@ MSP_MAIL_FROM=itsm@example.com
 MSP_MAIL_FROM_NAME=MSP ITSM
 ```
 
-Hoặc sửa `app/config.php`.
-
 ### 4. Web root
 
-Khuyến nghị đặt DocumentRoot vào `public/`.
+Khuyến nghị DocumentRoot trỏ vào `public/`.
 
-Apache/Nginx cần cho phép PHP-FPM xử lý `public/index.php`.
+### 5. Install
 
-### 5. Khởi tạo user
+Chạy `install.php` một lần nếu môi trường cần seed user ban đầu. Đổi password và xóa `install.php` trước production.
 
-Mở `/install.php` một lần sau khi import DB. Mặc định tạo user demo theo seed/install script.
-
-**Đổi password ngay và xóa `install.php` trước production.**
-
-### 6. Contract Alert Cron
-
-Chạy mỗi ngày, ví dụ 08:00:
-
-```cron
-0 8 * * * /usr/bin/php /path/to/project/cron/contract_alerts.php >> /var/log/msp-contract-alert.log 2>&1
-```
-
-## Kiến trúc dữ liệu
-
-ITSM là System of Record. Customer Portal và Service Portal cùng làm việc trên một Ticket domain/database. Bitrix24 chỉ là **integration option** cho Internal Collaboration/Task Execution trong tương lai; không tạo hai Ticket độc lập sống song song.
-
-## Quy tắc phát triển
+## Development rules
 
 Mỗi module phải hoàn thành theo chu trình:
 
 ```text
-Analysis → Code → PHP Lint → Functional Test → GitHub Actions PASS → Commit → Module DONE
+Business Analysis
+    ↓
+Database / Migration
+    ↓
+Policy
+    ↓
+Service
+    ↓
+UI / Portal
+    ↓
+PHP Lint
+    ↓
+Functional / Business Tests
+    ↓
+Security / RBAC Tests
+    ↓
+Integration / E2E
+    ↓
+GitHub Actions PASS
+    ↓
+Commit
+    ↓
+Module DONE
 ```
 
-Không chuyển module tiếp theo nếu module hiện tại chưa PASS.
+Không dùng `main` để đánh giá feature branch về mặt implementation. Feature branch phải tự đủ và nhất quán với nghiệp vụ mới nhất của nó.
 
-## Delivery / Release Gates
-
-Các module và lớp kiểm soát đã được đưa vào CI theo từng gate:
+## Release gates
 
 ```text
-Module 01–11
-   ↓
-PHP Lint + Module Tests
-   ↓
-Security / RBAC
-   ↓
-Platform Integration E2E
-   ↓
-Rollback + Negative-path Validation
-   ↓
-Release Regression
-   ↓
-UAT Readiness + Sign-off
-   ↓
-Production Go-Live Readiness
-   ↓
-Backup / Restore / DR
+Module completeness
+        ↓
+PHP Lint + Unit/Business Tests
+        ↓
+Database Integration
+        ↓
+Security / RBAC / Scope
+        ↓
+Cross-module E2E
+        ↓
+Negative-path / Rollback
+        ↓
+Regression
+        ↓
+UAT Readiness
+        ↓
+Production Readiness
 ```
 
-Production readiness không đồng nghĩa hệ thống đã được triển khai production. Trước go-live thực tế vẫn phải có backup/restore evidence, RPO/RTO, release approval, monitoring và rollback evidence.
+Production readiness không đồng nghĩa đã go-live. Trước production thật phải có backup/restore evidence, RPO/RTO, monitoring, release approval và rollback evidence.
 
-Runbook: [24 — Production Go-Live Readiness](docs/24_Production_GoLive_Readiness.md)
+## Current stabilization status
 
-DR: [25 — Backup / Restore / DR Runbook](docs/25_Backup_Restore_DR_Runbook.md)
+Trước khi phát triển nghiệp vụ mới, branch phải đạt các điều kiện:
 
-## Lộ trình tiếp theo
+- [x] Merge conflicts resolved
+- [x] `schema.sql` aligned with current Ticket/SLA model
+- [x] ContractService transaction/lifecycle implementation
+- [x] Ticket/Problem/Change/Knowledge/CMDB/Task services present
+- [x] Contract UI uses real database and ContractService
+- [x] Contract type aligned with database enum
+- [x] Ticket status badges aligned with current lifecycle
+- [ ] Full PHP lint on the target environment
+- [ ] Full database integration test
+- [ ] Full RBAC/object-scope regression
+- [ ] Cross-module E2E regression
+- [ ] CI green on the stabilization commit
 
-1. Hoàn thiện Service Portal shell + Customer Portal shell trên Shared Design System.
+## Lộ trình sau stabilization
+
+1. Hoàn thiện Service Portal shell + Customer Portal shell.
 2. Hoàn thiện RBAC + object-level/customer scope + field visibility.
-3. Hoàn thiện Customer + Contacts.
+3. Hoàn thiện Customer + Contacts CRUD.
 4. Hoàn thiện Service Catalog + SLA mapping.
-5. Hoàn thiện Contract CRUD + renewal workflow.
-6. Hoàn thiện Ticket + SLA + assignment + escalation trên Service Portal.
-7. Hoàn thiện Customer Portal Ticket experience + Confirm/Reopen.
+5. Hoàn thiện Contract CRUD/list/detail/renewal workflow.
+6. Hoàn thiện Ticket + SLA + assignment + escalation.
+7. Hoàn thiện Customer Portal Ticket experience.
 8. Email template/configuration + SMTP provider/queue.
-9. Dashboards theo role và reporting.
-10. Bitrix24 REST integration — **future / optional**.
-11. Problem / Change / Knowledge Base / CMDB.
-12. Automated tests, CI/CD, security hardening.
+9. Dashboards và reporting theo role.
+10. Hoàn thiện Problem / Change / Knowledge / CMDB / Task UI flows.
+11. Automated tests, CI/CD và security hardening.
+12. Bitrix24 REST integration — future / optional.
