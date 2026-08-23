@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+require_permission('contract.manage', 'SERVICE');
 
 $u = current_user();
-if (($u['role_code'] ?? '') === 'CUSTOMER') { http_response_code(403); exit('Forbidden'); }
 
 $customers = $db->query("SELECT id, code, name FROM customers WHERE status='ACTIVE' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 $services = $db->query("SELECT id, code, name FROM services WHERE is_active=1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
@@ -62,12 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'public_notes' => trim((string)$old['public_notes']) ?: null,
                 'internal_notes' => trim((string)$old['internal_notes']) ?: null,
                 'alert_days' => $old['alert_days'],
+                'service_ids' => $old['services'],
             ]);
-
-            if ($old['services'] !== []) {
-                $stmt = $db->prepare('INSERT INTO contract_services(contract_id,service_id) VALUES(?,?)');
-                foreach ($old['services'] as $serviceId) $stmt->execute([$id, $serviceId]);
-            }
 
             $success = "Contract #{$id} created successfully.";
             $old['contract_no'] = '';
