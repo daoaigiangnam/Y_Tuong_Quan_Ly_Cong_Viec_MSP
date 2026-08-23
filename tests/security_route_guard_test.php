@@ -38,7 +38,7 @@ security_route_assert(
     'Shared role guard exists and returns HTTP 403 for unauthorized roles'
 );
 security_route_assert(
-    str_contains($auth, 'u.is_active=1'),
+    preg_match('/u\.is_active\s*=\s*1/', $auth) === 1,
     'Login query rejects inactive users'
 );
 
@@ -62,8 +62,14 @@ foreach ($protectedRoutes as $relativePath) {
 
 $customer = route_source($root . '/public/customer.php');
 security_route_assert(
-    str_contains($customer, 'role_code') && str_contains($customer, "==='CUSTOMER'") && str_contains($customer, '403'),
-    'Customer master blocks customer-portal users from internal customer administration'
+    str_contains($customer, "require_permission('customer.manage', 'SERVICE');"),
+    'Customer administration requires the customer.manage permission'
+);
+
+$contract = route_source($root . '/public/contract.php');
+security_route_assert(
+    str_contains($contract, "require_permission('contract.manage', 'SERVICE');"),
+    'Contract administration requires the contract.manage permission'
 );
 
 $tasks = route_source($root . '/public/tasks.php');
