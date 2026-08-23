@@ -10,8 +10,6 @@
 
 ## Mục tiêu nghiệp vụ
 
-Nền tảng quản lý xuyên suốt:
-
 ```text
 Customer
   ↓
@@ -35,10 +33,10 @@ Audit / Email / History xuyên suốt
 
 Một Shared Design System với hai experience:
 
-- **Service Portal**: IT Owner, IT Support, IT Lead và các team vận hành khác theo RBAC/scope.
-- **Customer Portal**: giao diện riêng cho khách hàng.
+- **Service Portal**: IT Owner, IT Support, IT Lead và các team vận hành theo RBAC/scope.
+- **Customer Portal**: trải nghiệm riêng cho khách hàng.
 - Hai portal dùng chung Ticket domain và cùng một MySQL source of truth.
-- Navigation, field visibility, action và dashboard thay đổi theo role/scope.
+- Navigation, field visibility, action và dashboard được quyết định bởi permission + portal + object scope.
 - Bitrix24 REST là integration option cho giai đoạn sau, không phải dependency của core product.
 
 ## Implementation hiện tại
@@ -48,7 +46,10 @@ Một Shared Design System với hai experience:
 - Login/logout, session, password hashing
 - CSRF protection
 - PDO + prepared statements
-- RBAC nền tảng
+- Database-backed RBAC permissions
+- Portal separation: SERVICE / CUSTOMER
+- Object scope: GLOBAL / CUSTOMER / SERVICE / ASSIGNED
+- Permission guard `require_permission()`
 - Audit log
 - Email log
 - Customer và Customer Contacts
@@ -62,7 +63,7 @@ Một Shared Design System với hai experience:
 - Contract alert execution/history
 - Contract UI database-backed
 
-Contract type là:
+Contract type:
 
 ```text
 FULL_PACKAGE
@@ -84,7 +85,7 @@ PAY_PER_INCIDENT
 - Reopen counter
 - Email alert
 
-Ticket lifecycle hỗ trợ:
+Ticket lifecycle:
 
 ```text
 NEW → TRIAGED → ASSIGNED → IN_PROGRESS
@@ -146,6 +147,40 @@ RESOLVED/CLOSED → REOPENED
 - Ticket linkage
 - History
 
+## RBAC model
+
+Permission is evaluated in this order:
+
+```text
+Active user
+   ↓
+Portal
+   ↓
+Permission
+   ↓
+Object scope
+   ↓
+ALLOW / DENY
+```
+
+Available portal types:
+
+```text
+SERVICE
+CUSTOMER
+```
+
+Available scopes:
+
+```text
+GLOBAL
+CUSTOMER
+SERVICE
+ASSIGNED
+```
+
+Permissions are stored in `permissions` and assigned to roles through `role_permissions`; they are loaded into the authenticated session at login.
+
 ## Stack
 
 - PHP 8.3+ — plain PHP, no Laravel/framework
@@ -162,7 +197,19 @@ RESOLVED/CLOSED → REOPENED
 
 Migrations được áp dụng theo thứ tự trong `database/migrations/` để nâng cấp database hiện hữu.
 
-Các nhóm migration hiện có gồm Customer/User, Ticket hardening, Contract Alert, Problem, Change, Knowledge, CMDB và Task.
+Migration groups hiện có:
+
+```text
+002 Customer/User
+003 Ticket request/SLA hardening
+004 Contract Alert Engine
+005 Problem
+006 Change
+007 Knowledge
+008 CMDB
+009 Task
+010 RBAC / Portal / Scope / Permissions
+```
 
 ## Cấu trúc chính
 
@@ -173,6 +220,7 @@ app/
   config.php
   db.php
   helpers.php
+  rbac_policy.php
   *_policy.php
   services/
 
@@ -211,7 +259,7 @@ mysql -u root -p < database/schema.sql
 mysql -u root -p msp_itsm < database/seed.sql
 ```
 
-Nếu nâng cấp database hiện hữu, chạy các migration còn thiếu theo thứ tự.
+Nếu nâng cấp database hiện hữu, chạy các migration còn thiếu theo thứ tự, bao gồm `010_rbac_scope_permissions.sql`.
 
 ### 3. Environment
 
@@ -231,7 +279,7 @@ Khuyến nghị DocumentRoot trỏ vào `public/`.
 
 ### 5. Install
 
-Chạy `install.php` một lần nếu môi trường cần seed user ban đầu. Đổi password và xóa `install.php` trước production.
+Chạy `install.php` một lần nếu môi trường cần seed user ban đầu. Installer phải được disable/xóa trước production.
 
 ## Development rules
 
@@ -289,34 +337,36 @@ Production Readiness
 
 Production readiness không đồng nghĩa đã go-live. Trước production thật phải có backup/restore evidence, RPO/RTO, monitoring, release approval và rollback evidence.
 
-## Current stabilization status
-
-Trước khi phát triển nghiệp vụ mới, branch phải đạt các điều kiện:
+## Stabilization / implementation status
 
 - [x] Merge conflicts resolved
-- [x] `schema.sql` aligned with current Ticket/SLA model
+- [x] Ticket/SLA schema baseline
 - [x] ContractService transaction/lifecycle implementation
 - [x] Ticket/Problem/Change/Knowledge/CMDB/Task services present
-- [x] Contract UI uses real database and ContractService
+- [x] Contract UI database-backed
 - [x] Contract type aligned with database enum
 - [x] Ticket status badges aligned with current lifecycle
-- [ ] Full PHP lint on the target environment
-- [ ] Full database integration test
-- [ ] Full RBAC/object-scope regression
+- [x] Database-backed RBAC permission model
+- [x] Portal and object-scope policy
+- [x] Authentication loads role permissions
+- [x] RBAC policy regression tests
+- [ ] Full PHP lint on target environment
+- [ ] Full MySQL integration test
+- [ ] Full RBAC/object-scope regression against live database
 - [ ] Cross-module E2E regression
-- [ ] CI green on the stabilization commit
+- [ ] CI green on the complete stabilization sequence
 
-## Lộ trình sau stabilization
+## Lộ trình tiếp theo
 
-1. Hoàn thiện Service Portal shell + Customer Portal shell.
-2. Hoàn thiện RBAC + object-level/customer scope + field visibility.
-3. Hoàn thiện Customer + Contacts CRUD.
-4. Hoàn thiện Service Catalog + SLA mapping.
-5. Hoàn thiện Contract CRUD/list/detail/renewal workflow.
-6. Hoàn thiện Ticket + SLA + assignment + escalation.
-7. Hoàn thiện Customer Portal Ticket experience.
+1. Service Portal shell + navigation driven by permission.
+2. Customer Portal shell with customer scope enforced at route/service level.
+3. Customer + Contacts CRUD.
+4. Service Catalog + SLA mapping.
+5. Contract CRUD/list/detail/renewal workflow.
+6. Ticket + SLA + assignment + escalation.
+7. Customer Portal Ticket experience.
 8. Email template/configuration + SMTP provider/queue.
-9. Dashboards và reporting theo role.
-10. Hoàn thiện Problem / Change / Knowledge / CMDB / Task UI flows.
+9. Dashboards và reporting theo role/scope.
+10. Problem / Change / Knowledge / CMDB / Task UI flows.
 11. Automated tests, CI/CD và security hardening.
 12. Bitrix24 REST integration — future / optional.
