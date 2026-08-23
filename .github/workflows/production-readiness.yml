@@ -7,11 +7,26 @@ on:
   pull_request:
     branches:
       - feature/php-mysql-msp-platform
+  workflow_dispatch:
 
 jobs:
   production-readiness:
     name: Production Go-Live Readiness
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msp_itsm
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
 
     steps:
       - name: Checkout
@@ -21,18 +36,61 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
+          extensions: pdo_mysql
+          coverage: none
 
-      - name: PHP syntax check
+      - name: Install schema, migrations and seed
+        env:
+          MYSQL_PWD: root
         run: |
           set -e
-          php -l tests/production_go_live_readiness_test.php
+          mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/schema.sql
+          for f in database/migrations/*.sql; do
+            echo "Applying $f"
+            mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < "$f"
+          done
+          mysql -h 127.0.0.1 -P 3306 -u root msp_itsm < database/seed.sql
 
-      - name: Production readiness test
+      - name: Full PHP syntax gate
+        run: find app public tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Deployment hardening gate
+        run: php tests/deployment_hardening_test.php
+
+      - name: UAT readiness gate
+        run: php tests/uat_readiness_test.php
+
+      - name: Platform integration gate
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: msp_itsm
+          DB_USER: root
+          DB_PASS: root
+        run: |
+          set -e
+          php tests/platform_integration_test.php
+          php tests/platform_integration_cleanup_test.php
+          php tests/platform_integration_negative_test.php
+
+      - name: Production readiness gate
         run: php tests/production_go_live_readiness_test.php
 
-      - name: Required artifact check
+      - name: Required release artifacts
         run: |
           set -e
+          test -f docs/23_UAT_Readiness_and_Signoff.md
           test -f docs/24_Production_GoLive_Readiness.md
           test -f docs/25_Backup_Restore_DR_Runbook.md
+          test -f tests/uat_readiness_test.php
           test -f tests/production_go_live_readiness_test.php
+
+      - name: Production readiness summary
+        run: |
+          echo "========================================"
+          echo "PRODUCTION READINESS GATE PASSED"
+          echo "PHP syntax + deployment hardening"
+          echo "Schema + migrations + seed"
+          echo "UAT + platform integration + negative path"
+          echo "Production and DR artifacts"
+          echo "========================================"
