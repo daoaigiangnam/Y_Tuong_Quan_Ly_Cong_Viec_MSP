@@ -2,8 +2,8 @@
 declare(strict_types=1);
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+require_permission('customer.manage', 'SERVICE');
 $u=current_user();
-if (($u['role_code']??'')==='CUSTOMER') { http_response_code(403); exit('Forbidden'); }
 function h(string $title): void { $u=current_user(); ?><!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=e($title)?> - MSP ITSM</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="assets/app.css" rel="stylesheet"></head><body><nav class="navbar navbar-dark bg-primary"><div class="container-fluid"><a class="navbar-brand" href="index.php?page=dashboard">MSP ITSM</a><span class="text-white"><?=e($u['full_name'])?> · <a class="text-white" href="index.php?page=logout">Logout</a></span></div></nav><main class="container-fluid p-4"><?php foreach(flashes() as [$t,$m]):?><div class="alert alert-<?=$t?>"><?=e($m)?></div><?php endforeach; ?><h2><?=e($title)?></h2><?php }
 function f(): void { ?></main><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script></body></html><?php }
 $action=(string)get('action','list');
